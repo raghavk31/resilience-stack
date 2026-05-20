@@ -50,15 +50,15 @@ def stress_meta(s):
 YEAR_RANGE = (2000, 2023)
 
 # ── data loading ───────────────────────────────────────────────────────────────
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86400, persist="disk")
 def load_raw() -> pd.DataFrame:
     os.makedirs(CACHE_DIR, exist_ok=True)
     if not os.path.exists(OWID_FILE):
-        r = requests.get(OWID_URL, timeout=60); r.raise_for_status()
-        with open(OWID_FILE,"w",encoding="utf-8") as f: f.write(r.text)
+        r = requests.get(OWID_URL, timeout=90); r.raise_for_status()
+        with open(OWID_FILE, "w", encoding="utf-8") as f: f.write(r.text)
     return pd.read_csv(OWID_FILE, low_memory=False)
 
-@st.cache_data(ttl=86400*7)
+@st.cache_data(ttl=86400*7, persist="disk")
 def load_wb() -> dict:
     """Fetch World Bank access, grid-loss, and region data. Cache to disk."""
     os.makedirs(CACHE_DIR, exist_ok=True)
