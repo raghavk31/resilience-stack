@@ -3,17 +3,21 @@ Day 02 — Solar Potential Atlas
 The Resilience Stack: 30 Days Building the Intelligence Layer for Humanity
 
 Run:  streamlit run day02_solar_atlas.py
-Data: NASA POWER API (free, no key) + Open-Meteo geocoding (free, no key)
+Data: PVGIS (EU JRC, free) → NASA POWER fallback → Open-Meteo fallback
+      PVGIS uses CAMS/SARAH-3 satellite data — more accurate than NASA POWER,
+      especially outside the tropics.
 """
 
-import os, json, requests
+import os, json, requests, urllib3
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
+from calendar import monthrange
 
 # ── constants ──────────────────────────────────────────────────────────────────
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+PVGIS_URL   = "https://re.jrc.ec.europa.eu/api/v5_3/MRcalc"
 NASA_URL    = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 PANEL_W     = 400        # watts peak per panel
 PANEL_M2    = 1.7        # m² per panel
@@ -88,22 +92,69 @@ def _month_avg(d: dict) -> dict:
 
 HEADERS = {"User-Agent": "ResilienceStack/1.0 (climate research; contact@resiliencestack.earth)"}
 
+def _get_session() -> requests.Session:
+    """Session with retry — needed for EU JRC / NASA servers that reset connections."""
+    s = requests.Session()
+    retry = urllib3.Retry(total=3, backoff_factor=0.5,
+                          status_forcelist=[429, 500, 502, 503, 504])
+    s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retry))
+    s.headers.update(HEADERS)
+    return s
+
 @st.cache_data(ttl=86400*30, show_spinner=False)
 def fetch_solar(lat: float, lon: float) -> dict | None:
-    """Fetch monthly average GHI — tries NASA POWER first, falls back to Open-Meteo."""
+    """
+    3-source waterfall — most accurate first:
+      1. PVGIS (EU JRC)  — CAMS/SARAH-3 satellite, gold standard for solar
+      2. NASA POWER      — good fallback for remote/ocean locations
+      3. Open-Meteo ERA5 — last resort
+    """
+    sess = _get_session()
 
-    # ── Primary: NASA POWER ────────────────────────────────────────────────────
+    # ── 1. PVGIS MRcalc — monthly radiation on horizontal plane ───────────────
+    # H(h)_m = kWh/m² for that month. Divide by days-in-month → kWh/m²/day.
     try:
-        params = {
+        r = sess.get(PVGIS_URL, params={
+            "lat": round(lat, 4), "lon": round(lon, 4),
+            "startyear": 2019, "endyear": 2023,   # v5.3 supports up to 2023
+            "horirrad": 1,           # horizontal irradiation
+            "outputformat": "json",
+            "browser": 0,
+        }, timeout=30)
+        r.raise_for_status()
+        monthly_rows = r.json().get("outputs", {}).get("monthly", [])
+        if monthly_rows:
+            from collections import defaultdict
+            sums: dict = defaultdict(list)
+            for row in monthly_rows:
+                m   = int(row["month"])
+                yr  = int(row["year"])
+                hm  = row.get("H(h)_m")          # kWh/m² for the month
+                if hm and hm > 0:
+                    days = monthrange(yr, m)[1]
+                    sums[m].append(hm / days)     # → kWh/m²/day
+            ghi = {m: round(sum(vs)/len(vs), 3) for m, vs in sums.items() if vs}
+            # PVGIS doesn't return clear-sky or temp in MRcalc — approximate
+            clr  = {m: round(v * 1.18, 3) for m, v in ghi.items()}
+            temp = {m: None for m in range(1, 13)}
+            valid = [v for v in ghi.values() if v and v > 0]
+            if len(valid) >= 10:
+                annual = round(sum(valid) / len(valid), 3)
+                return {"ghi": ghi, "clear": clr, "temp": temp,
+                        "annual": annual, "source": "PVGIS · EU JRC (SARAH-3 satellite)"}
+    except Exception:
+        pass
+
+    # ── 2. NASA POWER ──────────────────────────────────────────────────────────
+    try:
+        r = sess.get(NASA_URL, params={
             "parameters": "ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN,T2M",
             "community":  "RE",
             "longitude":  round(lon, 4),
             "latitude":   round(lat, 4),
-            "start":      2019,
-            "end":        2023,
-            "format":     "JSON",
-        }
-        r = requests.get(NASA_URL, params=params, headers=HEADERS, timeout=30)
+            "start": 2019, "end": 2023,
+            "format": "JSON",
+        }, timeout=30)
         r.raise_for_status()
         data = r.json()["properties"]["parameter"]
         ghi  = _month_avg(data["ALLSKY_SFC_SW_DWN"])
@@ -111,46 +162,34 @@ def fetch_solar(lat: float, lon: float) -> dict | None:
         temp = _month_avg(data["T2M"])
         valid = [v for v in ghi.values() if v]
         if valid:
-            annual = round(sum(valid)/len(valid), 3)
-            return {"ghi": ghi, "clear": clr, "temp": temp, "annual": annual, "source": "NASA POWER"}
+            return {"ghi": ghi, "clear": clr, "temp": temp,
+                    "annual": round(sum(valid)/len(valid), 3),
+                    "source": "NASA POWER"}
     except Exception:
         pass
 
-    # ── Fallback: Open-Meteo historical (shortwave_radiation → kWh/m²/day) ────
+    # ── 3. Open-Meteo ERA5 ────────────────────────────────────────────────────
     try:
-        # Fetch daily shortwave radiation for 2022–2023, then average by month
-        r = requests.get(
-            "https://archive-api.open-meteo.com/v1/archive",
-            params={
-                "latitude": round(lat, 4), "longitude": round(lon, 4),
-                "start_date": "2019-01-01", "end_date": "2023-12-31",
-                "daily": "shortwave_radiation_sum",   # MJ/m²/day
-                "timezone": "UTC",
-            },
-            headers=HEADERS, timeout=30,
-        )
+        from collections import defaultdict
+        r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
+            "latitude": round(lat, 4), "longitude": round(lon, 4),
+            "start_date": "2019-01-01", "end_date": "2023-12-31",
+            "daily": "shortwave_radiation_sum", "timezone": "UTC",
+        }, timeout=30)
         r.raise_for_status()
         daily = r.json().get("daily", {})
-        dates = daily.get("time", [])
-        rads  = daily.get("shortwave_radiation_sum", [])   # MJ/m²/day
-
-        # Group by calendar month, convert MJ/m² → kWh/m² (÷3.6)
-        from collections import defaultdict
-        monthly_sums = defaultdict(list)
-        for d, v in zip(dates, rads):
+        monthly_sums: dict = defaultdict(list)
+        for d, v in zip(daily.get("time", []), daily.get("shortwave_radiation_sum", [])):
             if v is not None and v >= 0:
-                m = int(d[5:7])
-                monthly_sums[m].append(v / 3.6)
-
+                monthly_sums[int(d[5:7])].append(v / 3.6)
         ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in monthly_sums.items() if vs}
-        # Open-Meteo doesn't have clear-sky or temp in this call; approximate
-        clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}   # rough clear-sky estimate
+        clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}
         temp = {m: None for m in range(1, 13)}
-
         valid = list(ghi.values())
         if valid:
-            annual = round(sum(valid)/len(valid), 3)
-            return {"ghi": ghi, "clear": clr, "temp": temp, "annual": annual, "source": "Open-Meteo"}
+            return {"ghi": ghi, "clear": clr, "temp": temp,
+                    "annual": round(sum(valid)/len(valid), 3),
+                    "source": "Open-Meteo (ERA5)"}
     except Exception:
         pass
 
