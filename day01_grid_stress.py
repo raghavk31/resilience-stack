@@ -16,6 +16,7 @@ from functools import lru_cache
 OWID_URL   = "https://raw.githubusercontent.com/owid/energy-data/master/owid-energy-data.csv"
 CACHE_DIR  = "data"
 OWID_FILE  = "data/owid_energy.csv"
+OWID_SLIM  = "data/owid_energy_slim.csv"   # pre-filtered, committed to repo
 WB_FILE    = "data/worldbank_cache.json"
 
 WB_ACCESS  = "EG.ELC.ACCS.ZS"   # % population with electricity
@@ -50,8 +51,12 @@ def stress_meta(s):
 YEAR_RANGE = (2000, 2023)
 
 # ── data loading ───────────────────────────────────────────────────────────────
-@st.cache_data(ttl=86400, persist="disk")
+@st.cache_data(ttl=86400*7, persist="disk")
 def load_raw() -> pd.DataFrame:
+    # Use the pre-filtered slim file if available (committed to repo, 390 KB vs 22 MB)
+    if os.path.exists(OWID_SLIM):
+        return pd.read_csv(OWID_SLIM, low_memory=False)
+    # Fallback: download full dataset and cache locally
     os.makedirs(CACHE_DIR, exist_ok=True)
     if not os.path.exists(OWID_FILE):
         r = requests.get(OWID_URL, timeout=90); r.raise_for_status()
