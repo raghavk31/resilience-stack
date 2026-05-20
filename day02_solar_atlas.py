@@ -473,10 +473,10 @@ def main():
         worst_month = min(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
         best_val  = solar["ghi"].get(best_month)  or 0
         worst_val = solar["ghi"].get(worst_month) or 0
-        temp_avg  = round(sum(v for v in solar["temp"].values() if v) /
-                          len([v for v in solar["temp"].values() if v]), 1)
+        _temp_vals = [v for v in solar["temp"].values() if v is not None]
+        temp_avg   = round(sum(_temp_vals) / len(_temp_vals), 1) if _temp_vals else None
         # Temperature efficiency factor (panels lose ~0.4%/°C above 25°C)
-        temp_penalty = max(0, (temp_avg - 25) * 0.4)
+        temp_penalty = max(0, (temp_avg - 25) * 0.4) if temp_avg is not None else 0
 
         st.markdown(f"""
 <div class='glass fade-in' style='box-shadow:0 0 60px rgba(251,191,36,0.08)'>
@@ -521,8 +521,8 @@ def main():
                 padding:10px;text-align:center'>
       <div style='color:#475569;font-size:.65rem;text-transform:uppercase;
                   letter-spacing:.08em;font-weight:600'>Avg temp</div>
-      <div style='color:#f97316;font-weight:700;margin-top:3px'>{temp_avg}°C</div>
-      <div style='color:#64748b;font-size:.75rem'>{"−"+str(round(temp_penalty,1))+"% eff." if temp_penalty > 0.5 else "Ideal"}</div>
+      <div style='color:#f97316;font-weight:700;margin-top:3px'>{f"{temp_avg}°C" if temp_avg is not None else "—"}</div>
+      <div style='color:#64748b;font-size:.75rem'>{"−"+str(round(temp_penalty,1))+"% eff." if temp_penalty > 0.5 else "N/A" if temp_avg is None else "Ideal"}</div>
     </div>
   </div>
 </div>
