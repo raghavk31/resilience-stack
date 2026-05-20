@@ -79,9 +79,20 @@ def geocode(query: str):
     except Exception:
         return None
 
+def _month_avg(d: dict) -> dict:
+    avgs = {}
+    for m in range(1, 13):
+        vals = [v for k, v in d.items() if k.endswith(f"{m:02d}") and v and v > 0]
+        avgs[m] = round(sum(vals)/len(vals), 3) if vals else None
+    return avgs
+
+HEADERS = {"User-Agent": "ResilienceStack/1.0 (climate research; contact@resiliencestack.earth)"}
+
 @st.cache_data(ttl=86400*30, show_spinner=False)
 def fetch_solar(lat: float, lon: float) -> dict | None:
-    """Fetch 5-year monthly average GHI from NASA POWER."""
+    """Fetch monthly average GHI — tries NASA POWER first, falls back to Open-Meteo."""
+
+    # ── Primary: NASA POWER ────────────────────────────────────────────────────
     try:
         params = {
             "parameters": "ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN,T2M",
@@ -92,33 +103,58 @@ def fetch_solar(lat: float, lon: float) -> dict | None:
             "end":        2023,
             "format":     "JSON",
         }
-        r = requests.get(NASA_URL, params=params, timeout=30)
+        r = requests.get(NASA_URL, params=params, headers=HEADERS, timeout=30)
         r.raise_for_status()
         data = r.json()["properties"]["parameter"]
-
-        ghi_monthly   = data["ALLSKY_SFC_SW_DWN"]   # {YYYYMM: value}
-        clear_monthly = data["CLRSKY_SFC_SW_DWN"]
-        temp_monthly  = data["T2M"]
-
-        # Average across years by month
-        def month_avg(d):
-            avgs = {}
-            for m in range(1, 13):
-                vals = [v for k, v in d.items()
-                        if k.endswith(f"{m:02d}") and v > 0]
-                avgs[m] = round(sum(vals)/len(vals), 3) if vals else None
-            return avgs
-
-        ghi  = month_avg(ghi_monthly)
-        clr  = month_avg(clear_monthly)
-        temp = month_avg(temp_monthly)
-
+        ghi  = _month_avg(data["ALLSKY_SFC_SW_DWN"])
+        clr  = _month_avg(data["CLRSKY_SFC_SW_DWN"])
+        temp = _month_avg(data["T2M"])
         valid = [v for v in ghi.values() if v]
-        annual = round(sum(valid)/len(valid), 3) if valid else None
-
-        return {"ghi": ghi, "clear": clr, "temp": temp, "annual": annual}
+        if valid:
+            annual = round(sum(valid)/len(valid), 3)
+            return {"ghi": ghi, "clear": clr, "temp": temp, "annual": annual, "source": "NASA POWER"}
     except Exception:
-        return None
+        pass
+
+    # ── Fallback: Open-Meteo historical (shortwave_radiation → kWh/m²/day) ────
+    try:
+        # Fetch daily shortwave radiation for 2022–2023, then average by month
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude": round(lat, 4), "longitude": round(lon, 4),
+                "start_date": "2019-01-01", "end_date": "2023-12-31",
+                "daily": "shortwave_radiation_sum",   # MJ/m²/day
+                "timezone": "UTC",
+            },
+            headers=HEADERS, timeout=30,
+        )
+        r.raise_for_status()
+        daily = r.json().get("daily", {})
+        dates = daily.get("time", [])
+        rads  = daily.get("shortwave_radiation_sum", [])   # MJ/m²/day
+
+        # Group by calendar month, convert MJ/m² → kWh/m² (÷3.6)
+        from collections import defaultdict
+        monthly_sums = defaultdict(list)
+        for d, v in zip(dates, rads):
+            if v is not None and v >= 0:
+                m = int(d[5:7])
+                monthly_sums[m].append(v / 3.6)
+
+        ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in monthly_sums.items() if vs}
+        # Open-Meteo doesn't have clear-sky or temp in this call; approximate
+        clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}   # rough clear-sky estimate
+        temp = {m: None for m in range(1, 13)}
+
+        valid = list(ghi.values())
+        if valid:
+            annual = round(sum(valid)/len(valid), 3)
+            return {"ghi": ghi, "clear": clr, "temp": temp, "annual": annual, "source": "Open-Meteo"}
+    except Exception:
+        pass
+
+    return None
 
 # ── calculations ───────────────────────────────────────────────────────────────
 def calc(annual_ghi: float, n_panels: int) -> dict:
@@ -457,7 +493,7 @@ def main():
         st.markdown("<div class='glass'>", unsafe_allow_html=True)
         st.markdown("<p style='color:#64748b;font-size:.75rem;margin-bottom:4px;"
                     "text-transform:uppercase;letter-spacing:.1em;font-weight:600'>"
-                    "Monthly solar irradiance — 5-year average (NASA POWER 2019–2023)</p>",
+                    f"Monthly solar irradiance — 5-year average ({solar.get('source','NASA POWER')} 2019–2023)</p>",
                     unsafe_allow_html=True)
         st.plotly_chart(make_monthly_chart(solar, loc["name"]),
                         use_container_width=True, key="monthly_chart")
