@@ -1,54 +1,60 @@
 """
-Day 02 — Solar Potential Atlas
+Day 02 — Solar Potential Atlas  (V2: Interactive Map Edition)
 The Resilience Stack: 30 Days Building the Intelligence Layer for Humanity
 
 Run:  streamlit run day02_solar_atlas.py
 Data: PVGIS (EU JRC, free) → NASA POWER fallback → Open-Meteo fallback
-      PVGIS uses CAMS/SARAH-3 satellite data — more accurate than NASA POWER,
-      especially outside the tropics.
+Map:  Folium — click anywhere on earth to get solar data
+      Draw a rectangle to analyse total area solar potential
+      OSM building footprints coloured by rooftop potential (zoom ≥ 14)
 """
 
-import os, json, requests, urllib3
+import math, requests, urllib3
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 import streamlit as st
+import folium
+from folium.plugins import Draw, LocateControl
+from streamlit_folium import st_folium
 from calendar import monthrange
+from collections import defaultdict
 
 # ── constants ──────────────────────────────────────────────────────────────────
-GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
-PVGIS_URL   = "https://re.jrc.ec.europa.eu/api/v5_3/MRcalc"
-NASA_URL    = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+GEOCODE_URL  = "https://geocoding-api.open-meteo.com/v1/search"
+PVGIS_URL    = "https://re.jrc.ec.europa.eu/api/v5_3/MRcalc"
+NASA_URL     = "https://power.larc.nasa.gov/api/temporal/monthly/point"
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+NOMINATIM    = "https://nominatim.openstreetmap.org/reverse"
+
 PANEL_W     = 400        # watts peak per panel
 PANEL_M2    = 1.7        # m² per panel
 EFFICIENCY  = 0.20       # monocrystalline
 PERF_RATIO  = 0.80       # system losses
 CO2_G_KWH   = 450        # world avg grid CO2 intensity gCO2/kWh
-COST_USD_W  = 1.0        # installed cost $/W (global avg, falling fast)
+COST_USD_W  = 1.0        # installed cost $/W
 
 MONTHS = ["Jan","Feb","Mar","Apr","May","Jun",
           "Jul","Aug","Sep","Oct","Nov","Dec"]
 
-# Notable locations for comparison
 BENCHMARKS = {
-    "Sahara Desert":   7.3,
-    "Rajasthan, India":6.2,
-    "Dubai":           5.8,
-    "Los Angeles":     5.5,
-    "Mumbai":          5.2,
-    "Beijing":         4.5,
-    "Madrid":          5.1,
-    "New York":        4.3,
-    "London":          2.8,
-    "Berlin":          3.1,
-    "Tokyo":           4.0,
-    "Sydney":          5.0,
-    "São Paulo":       5.3,
-    "Lagos":           5.4,
-    "Nairobi":         5.7,
+    "Sahara Desert":    7.3,
+    "Rajasthan, India": 6.2,
+    "Dubai":            5.8,
+    "Los Angeles":      5.5,
+    "Mumbai":           5.2,
+    "Beijing":          4.5,
+    "Madrid":           5.1,
+    "New York":         4.3,
+    "London":           2.8,
+    "Berlin":           3.1,
+    "Tokyo":            4.0,
+    "Sydney":           5.0,
+    "São Paulo":        5.3,
+    "Lagos":            5.4,
+    "Nairobi":          5.7,
 }
 
-# Solar class bands: (min_ghi, label, colour, tagline)
+# (min_ghi, label, colour, tagline)
 SOLAR_BANDS = [
     (6.5, "WORLD-CLASS", "#f59e0b", "Top 1% globally — pure solar gold"),
     (5.5, "EXCELLENT",   "#fb923c", "More sun than most of Europe gets in a year"),
@@ -64,10 +70,22 @@ def solar_class(ghi):
     return "LOW", "#60a5fa", "Solar works, but needs more panels per kWh"
 
 # ── data fetching ──────────────────────────────────────────────────────────────
-@st.cache_data(ttl=86400*30, show_spinner=False)
+HEADERS = {"User-Agent": "ResilienceStack/1.0 (climate research; contact@resiliencestack.earth)"}
+
+def _get_session() -> requests.Session:
+    s = requests.Session()
+    retry = urllib3.Retry(total=3, backoff_factor=0.5,
+                          status_forcelist=[429, 500, 502, 503, 504])
+    s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retry))
+    s.headers.update(HEADERS)
+    return s
+
+@st.cache_data(ttl=86400 * 30, show_spinner=False)
 def geocode(query: str):
     try:
-        r = requests.get(GEOCODE_URL, params={"name": query, "count": 1, "language": "en", "format": "json"}, timeout=10)
+        r = requests.get(GEOCODE_URL,
+                         params={"name": query, "count": 1, "language": "en", "format": "json"},
+                         timeout=10)
         r.raise_for_status()
         results = r.json().get("results", [])
         if not results:
@@ -83,65 +101,67 @@ def geocode(query: str):
     except Exception:
         return None
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def reverse_geocode(lat: float, lon: float) -> str:
+    """Best-effort reverse geocode via Nominatim (OSM)."""
+    try:
+        r = requests.get(NOMINATIM,
+                         params={"lat": lat, "lon": lon, "format": "jsonv2"},
+                         headers=HEADERS, timeout=8)
+        r.raise_for_status()
+        addr = r.json().get("address", {})
+        city = (addr.get("city") or addr.get("town") or addr.get("village")
+                or addr.get("suburb") or addr.get("county") or "")
+        country = addr.get("country", "")
+        return f"{city}, {country}" if city and country else f"{lat:.3f}°, {lon:.3f}°"
+    except Exception:
+        return f"{lat:.3f}°, {lon:.3f}°"
+
 def _month_avg(d: dict) -> dict:
     avgs = {}
     for m in range(1, 13):
         vals = [v for k, v in d.items() if k.endswith(f"{m:02d}") and v and v > 0]
-        avgs[m] = round(sum(vals)/len(vals), 3) if vals else None
+        avgs[m] = round(sum(vals) / len(vals), 3) if vals else None
     return avgs
 
-HEADERS = {"User-Agent": "ResilienceStack/1.0 (climate research; contact@resiliencestack.earth)"}
-
-def _get_session() -> requests.Session:
-    """Session with retry — needed for EU JRC / NASA servers that reset connections."""
-    s = requests.Session()
-    retry = urllib3.Retry(total=3, backoff_factor=0.5,
-                          status_forcelist=[429, 500, 502, 503, 504])
-    s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retry))
-    s.headers.update(HEADERS)
-    return s
-
-@st.cache_data(ttl=86400*30, show_spinner=False)
+@st.cache_data(ttl=86400 * 30, show_spinner=False)
 def fetch_solar(lat: float, lon: float) -> dict | None:
     """
-    3-source waterfall — most accurate first:
-      1. PVGIS (EU JRC)  — CAMS/SARAH-3 satellite, gold standard for solar
-      2. NASA POWER      — good fallback for remote/ocean locations
-      3. Open-Meteo ERA5 — last resort
+    3-source waterfall:
+      1. PVGIS (EU JRC SARAH-3) — gold standard
+      2. NASA POWER              — global fallback
+      3. Open-Meteo ERA5         — last resort
     """
     sess = _get_session()
 
-    # ── 1. PVGIS MRcalc — monthly radiation on horizontal plane ───────────────
-    # H(h)_m = kWh/m² for that month. Divide by days-in-month → kWh/m²/day.
+    # ── 1. PVGIS MRcalc ───────────────────────────────────────────────────────
     try:
         r = sess.get(PVGIS_URL, params={
             "lat": round(lat, 4), "lon": round(lon, 4),
-            "startyear": 2019, "endyear": 2023,   # v5.3 supports up to 2023
-            "horirrad": 1,           # horizontal irradiation
+            "startyear": 2019, "endyear": 2023,
+            "horirrad": 1,
             "outputformat": "json",
             "browser": 0,
         }, timeout=30)
         r.raise_for_status()
         monthly_rows = r.json().get("outputs", {}).get("monthly", [])
         if monthly_rows:
-            from collections import defaultdict
             sums: dict = defaultdict(list)
             for row in monthly_rows:
-                m   = int(row["month"])
-                yr  = int(row["year"])
-                hm  = row.get("H(h)_m")          # kWh/m² for the month
+                m  = int(row["month"])
+                yr = int(row["year"])
+                hm = row.get("H(h)_m")
                 if hm and hm > 0:
                     days = monthrange(yr, m)[1]
-                    sums[m].append(hm / days)     # → kWh/m²/day
-            ghi = {m: round(sum(vs)/len(vs), 3) for m, vs in sums.items() if vs}
-            # PVGIS doesn't return clear-sky or temp in MRcalc — approximate
+                    sums[m].append(hm / days)
+            ghi  = {m: round(sum(vs) / len(vs), 3) for m, vs in sums.items() if vs}
             clr  = {m: round(v * 1.18, 3) for m, v in ghi.items()}
             temp = {m: None for m in range(1, 13)}
             valid = [v for v in ghi.values() if v and v > 0]
             if len(valid) >= 10:
                 annual = round(sum(valid) / len(valid), 3)
                 return {"ghi": ghi, "clear": clr, "temp": temp,
-                        "annual": annual, "source": "PVGIS · EU JRC (SARAH-3 satellite)"}
+                        "annual": annual, "source": "PVGIS · EU JRC (SARAH-3)"}
     except Exception:
         pass
 
@@ -163,14 +183,13 @@ def fetch_solar(lat: float, lon: float) -> dict | None:
         valid = [v for v in ghi.values() if v]
         if valid:
             return {"ghi": ghi, "clear": clr, "temp": temp,
-                    "annual": round(sum(valid)/len(valid), 3),
+                    "annual": round(sum(valid) / len(valid), 3),
                     "source": "NASA POWER"}
     except Exception:
         pass
 
     # ── 3. Open-Meteo ERA5 ────────────────────────────────────────────────────
     try:
-        from collections import defaultdict
         r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
             "latitude": round(lat, 4), "longitude": round(lon, 4),
             "start_date": "2019-01-01", "end_date": "2023-12-31",
@@ -182,56 +201,200 @@ def fetch_solar(lat: float, lon: float) -> dict | None:
         for d, v in zip(daily.get("time", []), daily.get("shortwave_radiation_sum", [])):
             if v is not None and v >= 0:
                 monthly_sums[int(d[5:7])].append(v / 3.6)
-        ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in monthly_sums.items() if vs}
+        ghi  = {m: round(sum(vs) / len(vs), 3) for m, vs in monthly_sums.items() if vs}
         clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}
         temp = {m: None for m in range(1, 13)}
         valid = list(ghi.values())
         if valid:
             return {"ghi": ghi, "clear": clr, "temp": temp,
-                    "annual": round(sum(valid)/len(valid), 3),
+                    "annual": round(sum(valid) / len(valid), 3),
                     "source": "Open-Meteo (ERA5)"}
     except Exception:
         pass
 
     return None
 
+# ── OSM building footprints ────────────────────────────────────────────────────
+@st.cache_data(ttl=300, show_spinner=False)
+def get_buildings(south: float, west: float, north: float, east: float) -> list:
+    """Fetch building footprints from OSM Overpass within bbox."""
+    query = (
+        f"[out:json][timeout:25];\n"
+        f"(way[\"building\"]({south:.5f},{west:.5f},{north:.5f},{east:.5f}););\n"
+        f"out geom;"
+    )
+    try:
+        sess = _get_session()
+        r = sess.post(OVERPASS_URL, data={"data": query}, timeout=30)
+        r.raise_for_status()
+        elements = r.json().get("elements", [])
+        buildings = []
+        for el in elements:
+            if el.get("type") == "way" and el.get("geometry"):
+                coords = [(n["lat"], n["lon"]) for n in el["geometry"]]
+                if len(coords) >= 3:
+                    area = _polygon_area_m2(coords)
+                    if area > 10:   # ignore slivers
+                        buildings.append({"coords": coords, "area_m2": round(area, 1)})
+        return buildings
+    except Exception:
+        return []
+
+def _polygon_area_m2(coords: list) -> float:
+    """Shoelace formula with local degree→metre conversion."""
+    if len(coords) < 3:
+        return 0.0
+    lat0 = coords[0][0]
+    lat_m = 111_320.0
+    lon_m = 111_320.0 * math.cos(math.radians(lat0))
+    n = len(coords)
+    area = 0.0
+    for i in range(n):
+        x1 = coords[i][1] * lon_m
+        y1 = coords[i][0] * lat_m
+        x2 = coords[(i + 1) % n][1] * lon_m
+        y2 = coords[(i + 1) % n][0] * lat_m
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2.0
+
+def building_solar_kwh_yr(area_m2: float, annual_ghi: float) -> float:
+    """Annual solar potential for one rooftop (60% usable area)."""
+    return area_m2 * 0.6 * annual_ghi * EFFICIENCY * PERF_RATIO * 365
+
+def building_colour(kwh_yr: float) -> str:
+    if kwh_yr >= 20_000: return "#f59e0b"
+    if kwh_yr >= 10_000: return "#fb923c"
+    if kwh_yr >=  5_000: return "#fbbf24"
+    if kwh_yr >=  2_000: return "#a3e635"
+    return "#60a5fa"
+
+def calc_area_solar(bounds: dict, annual_ghi: float) -> dict:
+    """Solar potential for a drawn rectangle. 20% rooftop coverage assumed."""
+    south, north = bounds["south"], bounds["north"]
+    west,  east  = bounds["west"],  bounds["east"]
+    lat_m   = 111_320.0
+    lon_m   = 111_320.0 * math.cos(math.radians((south + north) / 2))
+    area_m2 = abs(east - west) * lon_m * abs(north - south) * lat_m
+    rooftop = area_m2 * 0.20 * 0.60
+    kwh_yr  = rooftop * annual_ghi * EFFICIENCY * PERF_RATIO * 365
+    return {
+        "area_km2":   round(area_m2 / 1_000_000, 3),
+        "area_ha":    round(area_m2 / 10_000, 1),
+        "rooftop_m2": round(rooftop),
+        "mwh_yr":     round(kwh_yr / 1000),
+        "kwh_yr":     round(kwh_yr),
+        "homes":      round(kwh_yr / 3500),
+        "panels":     int(rooftop / PANEL_M2),
+        "co2_kt":     round(kwh_yr * CO2_G_KWH / 1_000_000, 1),
+    }
+
+# ── map builder ────────────────────────────────────────────────────────────────
+def build_folium_map(lat: float, lon: float, zoom: int, annual_ghi: float,
+                     buildings: list | None = None,
+                     area_coords: list | None = None) -> folium.Map:
+    m = folium.Map(
+        location=[lat, lon],
+        zoom_start=zoom,
+        tiles="CartoDB dark_matter",
+        prefer_canvas=True,
+    )
+
+    # Rectangle-only draw tool
+    Draw(
+        export=False,
+        draw_options={
+            "rectangle": {"shapeOptions": {"color": "#f59e0b", "weight": 2,
+                                           "fillOpacity": 0.08}},
+            "polygon":      False,
+            "polyline":     False,
+            "circle":       False,
+            "marker":       False,
+            "circlemarker": False,
+        },
+        edit_options={"edit": False, "remove": True},
+    ).add_to(m)
+
+    LocateControl(auto_start=False).add_to(m)
+
+    _, sol_colour, _ = solar_class(annual_ghi)
+
+    # Selected-point marker (glowing dot)
+    folium.Marker(
+        location=[lat, lon],
+        icon=folium.DivIcon(
+            html=f"""
+            <div style="
+              width:18px;height:18px;border-radius:50%;
+              background:{sol_colour};
+              border:2.5px solid rgba(255,255,255,0.85);
+              box-shadow:0 0 14px {sol_colour},0 0 30px {sol_colour}55;
+            "></div>""",
+            icon_size=(18, 18),
+            icon_anchor=(9, 9),
+        ),
+        popup=folium.Popup(
+            f'<div style="font-family:Inter,sans-serif;padding:4px 6px">'
+            f'<b style="font-size:14px;color:#1a1a1a">{annual_ghi:.2f} kWh/m²/day</b><br>'
+            f'<span style="color:#555;font-size:11px">{lat:.4f}°, {lon:.4f}°</span>'
+            f'</div>',
+            max_width=190,
+        ),
+        tooltip=f"☀ {annual_ghi:.2f} kWh/m²/day  ·  click elsewhere to re-analyse",
+    ).add_to(m)
+
+    # Building footprints (zoom ≥ 14)
+    if buildings:
+        for b in buildings[:300]:
+            kwh = building_solar_kwh_yr(b["area_m2"], annual_ghi)
+            c   = building_colour(kwh)
+            folium.Polygon(
+                locations=b["coords"],
+                color=c, weight=1,
+                fill=True, fill_color=c, fill_opacity=0.62,
+                tooltip=(
+                    f"<b style='font-family:Inter'>{int(kwh):,} kWh/yr</b>"
+                    f"<br><span style='font-size:10px'>{int(b['area_m2'])} m² footprint</span>"
+                ),
+            ).add_to(m)
+
+    # Drawn rectangle overlay
+    if area_coords:
+        pts = [(c[1], c[0]) for c in area_coords]  # [lon,lat] → [lat,lon]
+        folium.Polygon(
+            locations=pts,
+            color="#f59e0b", weight=2.5, dash_array="8 5",
+            fill=True, fill_color="#f59e0b", fill_opacity=0.10,
+        ).add_to(m)
+
+    return m
+
 # ── calculations ───────────────────────────────────────────────────────────────
 def calc(annual_ghi: float, n_panels: int) -> dict:
-    area          = n_panels * PANEL_M2
-    kwh_per_day   = annual_ghi * area * EFFICIENCY * PERF_RATIO
-    kwh_per_year  = kwh_per_day * 365
-    peak_kw       = n_panels * PANEL_W / 1000
-    co2_kg_saved  = kwh_per_year * CO2_G_KWH / 1000
-    cost_usd      = peak_kw * 1000 * COST_USD_W
-
-    # What it powers (annual kWh benchmarks)
-    homes_avg_kwh = 3500    # global average home
-    phone_kwh     = 0.012   # per full charge
-    led_day_kwh   = 0.06    # 10W bulb, 6 hours
-
+    area         = n_panels * PANEL_M2
+    kwh_per_day  = annual_ghi * area * EFFICIENCY * PERF_RATIO
+    kwh_per_year = kwh_per_day * 365
+    peak_kw      = n_panels * PANEL_W / 1000
+    co2_kg       = kwh_per_year * CO2_G_KWH / 1000
+    cost_usd     = peak_kw * 1000 * COST_USD_W
     return {
         "kwh_per_year":   round(kwh_per_year),
         "kwh_per_day":    round(kwh_per_day, 1),
         "peak_kw":        round(peak_kw, 1),
-        "homes":          round(kwh_per_year / homes_avg_kwh, 1),
-        "phones_per_day": int(kwh_per_day * 1000 / 12),   # phones charged/day
-        "bulb_years":     round(kwh_per_year / (led_day_kwh * 365), 0),
-        "co2_kg":         round(co2_kg_saved),
-        "co2_trees":      round(co2_kg_saved / 21),   # ~21 kg CO2/tree/year
+        "homes":          round(kwh_per_year / 3500, 1),
+        "phones_per_day": int(kwh_per_day * 1000 / 12),
+        "bulb_years":     round(kwh_per_year / (0.06 * 365), 0),
+        "co2_kg":         round(co2_kg),
+        "co2_trees":      round(co2_kg / 21),
         "cost_usd":       round(cost_usd),
         "payback_yrs":    round(cost_usd / (kwh_per_year * 0.12), 1) if kwh_per_year > 0 else None,
     }
 
 # ── charts ─────────────────────────────────────────────────────────────────────
 def make_monthly_chart(solar_data: dict, location_name: str) -> go.Figure:
-    ghi  = solar_data["ghi"]
-    clr  = solar_data["clear"]
-    months_vals = [ghi.get(m) or 0 for m in range(1, 13)]
-    clear_vals  = [clr.get(m) or 0 for m in range(1, 13)]
-
-    # Colour bars by intensity
+    ghi_vals   = [solar_data["ghi"].get(m) or 0 for m in range(1, 13)]
+    clear_vals = [solar_data["clear"].get(m) or 0 for m in range(1, 13)]
     colours = []
-    for v in months_vals:
+    for v in ghi_vals:
         if v >= 6.5:   colours.append("#f59e0b")
         elif v >= 5.5: colours.append("#fb923c")
         elif v >= 4.5: colours.append("#fbbf24")
@@ -239,31 +402,20 @@ def make_monthly_chart(solar_data: dict, location_name: str) -> go.Figure:
         else:          colours.append("#60a5fa")
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=MONTHS, y=months_vals,
-        name="Actual (all-sky)",
-        marker_color=colours,
-        hovertemplate="<b>%{x}</b><br>%{y:.2f} kWh/m²/day<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=MONTHS, y=clear_vals,
-        name="Clear-sky max",
-        line=dict(color="rgba(255,255,255,0.2)", width=1.5, dash="dot"),
-        hovertemplate="<b>%{x}</b> clear-sky: %{y:.2f}<extra></extra>",
-        mode="lines",
-    ))
+    fig.add_trace(go.Bar(x=MONTHS, y=ghi_vals, name="Actual (all-sky)",
+                         marker_color=colours,
+                         hovertemplate="<b>%{x}</b><br>%{y:.2f} kWh/m²/day<extra></extra>"))
+    fig.add_trace(go.Scatter(x=MONTHS, y=clear_vals, name="Clear-sky max",
+                             line=dict(color="rgba(255,255,255,0.2)", width=1.5, dash="dot"),
+                             hovertemplate="<b>%{x}</b> clear-sky: %{y:.2f}<extra></extra>",
+                             mode="lines"))
     fig.update_layout(
-        height=240,
-        margin=dict(l=0, r=0, t=8, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        height=240, margin=dict(l=0, r=0, t=8, b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10)),
-        yaxis=dict(
-            showgrid=True, gridcolor="rgba(255,255,255,0.04)",
-            tickfont=dict(color="#64748b", size=10),
-            ticksuffix=" kWh",
-            title=dict(text="kWh/m²/day", font=dict(color="#475569", size=10)),
-        ),
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
+                   tickfont=dict(color="#64748b", size=10), ticksuffix=" kWh",
+                   title=dict(text="kWh/m²/day", font=dict(color="#475569", size=10))),
         legend=dict(font=dict(color="#64748b", size=10), bgcolor="rgba(0,0,0,0)",
                     orientation="h", y=1.15),
         bargap=0.25,
@@ -275,63 +427,49 @@ def make_comparison_chart(my_ghi: float, my_name: str) -> go.Figure:
     data[my_name] = my_ghi
     df = pd.DataFrame({"city": list(data.keys()), "ghi": list(data.values())})
     df = df.sort_values("ghi", ascending=True)
-
     colours = []
     for _, row in df.iterrows():
         if row["city"] == my_name:
             colours.append("#ffffff")
         else:
-            lbl, c, _ = solar_class(row["ghi"])
+            _, c, _ = solar_class(row["ghi"])
             colours.append(c)
-
-    # Mark the searched city in the label — Plotly 6 doesn't accept list for tickfont.color
     labels = ["▶ " + c if c == my_name else c for c in df["city"].tolist()]
-
     fig = go.Figure(go.Bar(
-        x=df["ghi"], y=labels,
-        orientation="h",
+        x=df["ghi"], y=labels, orientation="h",
         marker_color=colours,
         hovertemplate="<b>%{y}</b><br>%{x:.2f} kWh/m²/day<extra></extra>",
-        text=[f"{v:.1f}" for v in df["ghi"]],
-        textposition="outside",
+        text=[f"{v:.1f}" for v in df["ghi"]], textposition="outside",
         textfont=dict(color="#64748b", size=9),
     ))
     fig.update_layout(
-        height=max(320, len(df) * 22),
-        margin=dict(l=0, r=40, t=8, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        height=max(320, len(df) * 22), margin=dict(l=0, r=40, t=8, b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
                    tickfont=dict(color="#64748b", size=9), ticksuffix=" kWh"),
         yaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10)),
     )
-    # Annotate the selected city's bar to make it stand out
     my_row = df[df["city"] == my_name]
     if not my_row.empty:
         fig.add_annotation(
             x=my_row["ghi"].values[0], y="▶ " + my_name,
-            text=" ← you", showarrow=False,
-            xanchor="left", font=dict(color="#ffffff", size=9),
-            xshift=4,
+            text=" ← you", showarrow=False, xanchor="left",
+            font=dict(color="#ffffff", size=9), xshift=4,
         )
     return fig
 
 def make_generation_chart(solar_data: dict, n_panels: int) -> go.Figure:
-    ghi_vals = [solar_data["ghi"].get(m) or 0 for m in range(1, 13)]
-    area = n_panels * PANEL_M2
+    ghi_vals    = [solar_data["ghi"].get(m) or 0 for m in range(1, 13)]
+    area        = n_panels * PANEL_M2
     monthly_kwh = [round(v * area * EFFICIENCY * PERF_RATIO * 30) for v in ghi_vals]
-
     fig = go.Figure(go.Bar(
         x=MONTHS, y=monthly_kwh,
-        marker_color="#f59e0b",
-        marker_opacity=0.85,
+        marker_color="#f59e0b", marker_opacity=0.85,
         hovertemplate="<b>%{x}</b><br>%{y:,} kWh generated<extra></extra>",
     ))
     fig.update_layout(
-        height=180,
-        margin=dict(l=0, r=0, t=8, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        height=180, margin=dict(l=0, r=0, t=8, b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10)),
         yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
                    tickfont=dict(color="#64748b", size=10), ticksuffix=" kWh"),
@@ -346,8 +484,7 @@ def stat_chip(label, value, sub, colour="#f1f5f9"):
             border-radius:16px;padding:14px 18px;flex:1;min-width:110px'>
   <div style='color:#475569;font-size:.65rem;text-transform:uppercase;
               letter-spacing:.1em;font-weight:600'>{label}</div>
-  <div style='color:{colour};font-size:1.3rem;font-weight:800;margin-top:3px;
-              font-family:Inter,sans-serif'>{value}</div>
+  <div style='color:{colour};font-size:1.3rem;font-weight:800;margin-top:3px'>{value}</div>
   <div style='color:#334155;font-size:.68rem;margin-top:2px'>{sub}</div>
 </div>"""
 
@@ -410,141 +547,327 @@ hr{border-color:rgba(255,255,255,0.05)!important;margin:24px 0!important}
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 13px;
   border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
-.sun-ring{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;margin:0 auto 8px;position:relative}
+
+/* Folium map card */
+.map-wrap{border-radius:20px;overflow:hidden;
+  border:1px solid rgba(255,255,255,0.07);
+  box-shadow:0 4px 40px rgba(0,0,0,0.5)}
+.map-hint{color:#475569;font-size:.76rem;text-align:center;padding:8px 0 2px;
+  letter-spacing:.02em}
+
+/* Building legend */
+.bleg{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  padding:10px 16px;background:rgba(255,255,255,0.025);
+  border-radius:12px;border:1px solid rgba(255,255,255,0.05)}
+.bleg-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.bleg-lbl{color:#64748b;font-size:.72rem}
 </style>
 """
+
+# ══ SESSION STATE ══════════════════════════════════════════════════════════════
+def _init_state():
+    defaults = {
+        "lat":         19.0760,
+        "lon":         72.8777,
+        "loc_name":    "Mumbai",
+        "map_zoom":    12,
+        "mode":        "point",   # "point" | "area"
+        "area_bounds": None,
+        "area_coords": None,      # [[lon,lat], ...] from GeoJSON
+        "prev_click":  None,      # (lat,lon) to detect changes
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 # ══ MAIN ═══════════════════════════════════════════════════════════════════════
 def main():
     st.set_page_config(page_title="Solar Atlas · Day 02", page_icon="☀️",
                        layout="wide", initial_sidebar_state="collapsed")
     st.markdown(CSS, unsafe_allow_html=True)
+    _init_state()
 
     # ── header ────────────────────────────────────────────────────────────────
     st.markdown("""
-<div style='padding:32px 0 20px'>
+<div style='padding:28px 0 16px'>
   <div style='font-size:.72rem;color:#475569;letter-spacing:.15em;text-transform:uppercase;
               font-weight:600;margin-bottom:6px'>Day 02 · The Resilience Stack</div>
   <h1 class='gradient-text' style='font-size:2.6rem;font-weight:900;margin:0;line-height:1.1'>
     Solar Potential Atlas
   </h1>
-  <p style='color:#475569;margin:8px 0 0;font-size:.95rem;max-width:540px'>
-    The answer to grid stress is already falling on your roof.
-    Search any city on earth — see how much sun it gets, what you could generate,
-    and what that would replace.
+  <p style='color:#475569;margin:8px 0 0;font-size:.92rem;max-width:600px'>
+    Click anywhere on earth to see how much sun it gets.
+    Draw a rectangle to measure an area's solar potential.
+    Zoom in to see individual rooftops coloured by what they could generate.
   </p>
 </div>
 """, unsafe_allow_html=True)
 
-    # ── search ────────────────────────────────────────────────────────────────
+    # ── search bar ────────────────────────────────────────────────────────────
     params = st.query_params
     default_q = params.get("q", "Mumbai")
 
-    col_search, col_btn = st.columns([4, 1], gap="small")
-    with col_search:
-        query = st.text_input("", value=default_q, placeholder="Search any city — Lagos, Oslo, Dubai, São Paulo…",
+    col_s, col_b = st.columns([4, 1], gap="small")
+    with col_s:
+        query = st.text_input("", value=default_q,
+                              placeholder="Search any city — Lagos, Oslo, Dubai, São Paulo…",
                               label_visibility="collapsed", key="city_input")
-    with col_btn:
+    with col_b:
         search_btn = st.button("☀️ Explore", use_container_width=True, type="primary")
 
-    if search_btn or query:
+    if search_btn and query:
         st.query_params["q"] = query
+        with st.spinner("Locating…"):
+            loc = geocode(query)
+        if loc:
+            st.session_state.lat      = loc["lat"]
+            st.session_state.lon      = loc["lon"]
+            st.session_state.loc_name = f"{loc['name']}{', ' + loc['admin'] if loc['admin'] else ''}, {loc['country']}"
+            st.session_state.map_zoom = 12
+            st.session_state.mode     = "point"
+            st.session_state.area_bounds = None
+            st.session_state.area_coords = None
+            st.session_state.prev_click  = None
+            st.rerun()
+        else:
+            st.error("Location not found. Try a major city name.")
+            return
 
-    # ── fetch location ────────────────────────────────────────────────────────
-    with st.spinner("Locating…"):
-        loc = geocode(query)
+    # ── fetch solar for current point ─────────────────────────────────────────
+    lat  = st.session_state.lat
+    lon  = st.session_state.lon
+    zoom = st.session_state.map_zoom
 
-    if not loc:
-        st.error("Location not found. Try a major city name.")
-        return
-
-    lat, lon = loc["lat"], loc["lon"]
-    display_name = f"{loc['name']}{', ' + loc['admin'] if loc['admin'] else ''}, {loc['country']}"
-
-    # ── fetch solar data ──────────────────────────────────────────────────────
-    with st.spinner(f"Pulling NASA POWER solar data for {loc['name']}…"):
+    with st.spinner(f"Fetching solar data…"):
         solar = fetch_solar(lat, lon)
 
-    if not solar or not solar["annual"]:
-        st.error("Could not fetch solar data for this location. Try another city.")
+    if not solar or not solar.get("annual"):
+        st.error("Could not fetch solar data for this location. Try another.")
         return
 
-    annual_ghi = solar["annual"]
+    annual_ghi    = solar["annual"]
     sol_label, sol_colour, sol_tagline = solar_class(annual_ghi)
-    peak_sun_hrs = round(annual_ghi, 1)   # kWh/m²/day = peak sun hours/day
 
-    # ── spotlight row ─────────────────────────────────────────────────────────
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    # ── building footprints (zoom ≥ 14) ───────────────────────────────────────
+    buildings = []
+    show_buildings = zoom >= 14
+    if show_buildings:
+        delta = max(0.003, 0.035 / (2 ** (zoom - 14)))   # shrinks as you zoom in
+        with st.spinner("Loading building footprints…"):
+            buildings = get_buildings(lat - delta, lon - delta,
+                                      lat + delta, lon + delta)
+
+    # ── map ───────────────────────────────────────────────────────────────────
+    m = build_folium_map(lat, lon, zoom, annual_ghi,
+                         buildings=buildings if show_buildings else None,
+                         area_coords=st.session_state.area_coords)
+
+    # Map hint
+    if show_buildings and buildings:
+        hint = f"🏗 {len(buildings)} buildings loaded · coloured by rooftop solar potential"
+    elif show_buildings:
+        hint = "Zoom in more or pan to a built-up area to load building footprints"
+    else:
+        hint = "🖱 Click anywhere to analyse solar  ·  📐 Draw a rectangle for area analysis  ·  Zoom ≥ 14 for building footprints"
+
+    st.markdown(f"<p class='map-hint'>{hint}</p>", unsafe_allow_html=True)
+
+    st.markdown("<div class='map-wrap'>", unsafe_allow_html=True)
+    map_data = st_folium(
+        m,
+        returned_objects=["last_clicked", "last_active_drawing", "bounds", "zoom"],
+        key="solar_map",
+        height=540,
+        use_container_width=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── handle map events ─────────────────────────────────────────────────────
+    if map_data:
+        # Track zoom (no rerun needed — just update for next render)
+        new_zoom = map_data.get("zoom")
+        if new_zoom and new_zoom != st.session_state.map_zoom:
+            st.session_state.map_zoom = new_zoom
+
+        # Drawn rectangle → area mode
+        drawing = map_data.get("last_active_drawing")
+        if drawing and drawing.get("geometry", {}).get("type") == "Polygon":
+            coords = drawing["geometry"]["coordinates"][0]  # [[lon,lat],...]
+            lats = [c[1] for c in coords]
+            lons = [c[0] for c in coords]
+            new_bounds = {
+                "south": min(lats), "north": max(lats),
+                "west":  min(lons), "east":  max(lons),
+            }
+            if new_bounds != st.session_state.area_bounds:
+                st.session_state.area_bounds = new_bounds
+                st.session_state.area_coords = coords
+                st.session_state.mode = "area"
+                st.rerun()
+
+        # Map click → re-analyse new point
+        click = map_data.get("last_clicked")
+        if click:
+            new_lat = round(click["lat"], 5)
+            new_lon = round(click["lng"], 5)
+            prev = st.session_state.prev_click
+            if prev != (new_lat, new_lon):
+                st.session_state.prev_click  = (new_lat, new_lon)
+                st.session_state.lat         = new_lat
+                st.session_state.lon         = new_lon
+                st.session_state.mode        = "point"
+                st.session_state.area_bounds = None
+                st.session_state.area_coords = None
+                # Reverse geocode in background for a nicer name
+                st.session_state.loc_name = reverse_geocode(new_lat, new_lon)
+                st.rerun()
+
+    # ── building legend ───────────────────────────────────────────────────────
+    if show_buildings and buildings:
+        st.markdown("""
+<div class='bleg'>
+  <span style='color:#64748b;font-size:.72rem;font-weight:600;text-transform:uppercase;
+               letter-spacing:.08em'>Rooftop solar / yr</span>
+  <span class='bleg-dot' style='background:#60a5fa'></span><span class='bleg-lbl'>&lt; 2k kWh</span>
+  <span class='bleg-dot' style='background:#a3e635'></span><span class='bleg-lbl'>2–5k</span>
+  <span class='bleg-dot' style='background:#fbbf24'></span><span class='bleg-lbl'>5–10k</span>
+  <span class='bleg-dot' style='background:#fb923c'></span><span class='bleg-lbl'>10–20k</span>
+  <span class='bleg-dot' style='background:#f59e0b'></span><span class='bleg-lbl'>&gt; 20k kWh</span>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ── AREA MODE: solar potential panel ─────────────────────────────────────
+    if st.session_state.mode == "area" and st.session_state.area_bounds:
+        area = calc_area_solar(st.session_state.area_bounds, annual_ghi)
+        bs   = st.session_state.area_bounds
+        st.markdown(f"""
+<div class='glass fade-in' style='border-color:rgba(245,158,11,0.25);
+     box-shadow:0 0 40px rgba(245,158,11,0.06);margin-bottom:16px'>
+  <div style='display:flex;align-items:center;gap:10px;margin-bottom:16px'>
+    <span style='font-size:1.3rem'>📐</span>
+    <div>
+      <div style='font-size:.72rem;color:#f59e0b;text-transform:uppercase;
+                  letter-spacing:.1em;font-weight:700'>Area Solar Analysis</div>
+      <div style='color:#64748b;font-size:.8rem;margin-top:2px'>
+        {bs["south"]:.3f}°–{bs["north"]:.3f}°N · {bs["west"]:.3f}°–{bs["east"]:.3f}°E
+      </div>
+    </div>
+    <div style='margin-left:auto'>
+      <span class='badge' style='background:rgba(245,158,11,0.1);color:#f59e0b;
+            border:1px solid rgba(245,158,11,0.3)'>{area["area_km2"]} km²</span>
+    </div>
+  </div>
+  <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px'>
+    <div style='background:rgba(255,255,255,0.025);border-radius:14px;padding:14px;text-align:center'>
+      <div style='color:#f59e0b;font-size:1.6rem;font-weight:800'>{area["mwh_yr"]:,}</div>
+      <div style='color:#64748b;font-size:.7rem;margin-top:3px'>MWh / year</div>
+      <div style='color:#334155;font-size:.65rem'>total rooftop potential</div>
+    </div>
+    <div style='background:rgba(255,255,255,0.025);border-radius:14px;padding:14px;text-align:center'>
+      <div style='color:#4ade80;font-size:1.6rem;font-weight:800'>{area["homes"]:,}</div>
+      <div style='color:#64748b;font-size:.7rem;margin-top:3px'>homes powered</div>
+      <div style='color:#334155;font-size:.65rem'>at 3,500 kWh/yr avg</div>
+    </div>
+    <div style='background:rgba(255,255,255,0.025);border-radius:14px;padding:14px;text-align:center'>
+      <div style='color:#60a5fa;font-size:1.6rem;font-weight:800'>{area["panels"]:,}</div>
+      <div style='color:#64748b;font-size:.7rem;margin-top:3px'>panels needed</div>
+      <div style='color:#334155;font-size:.65rem'>{area["rooftop_m2"]:,} m² usable roof</div>
+    </div>
+    <div style='background:rgba(255,255,255,0.025);border-radius:14px;padding:14px;text-align:center'>
+      <div style='color:#f97316;font-size:1.6rem;font-weight:800'>{area["co2_kt"]}</div>
+      <div style='color:#64748b;font-size:.7rem;margin-top:3px'>kt CO₂ / year</div>
+      <div style='color:#334155;font-size:.65rem'>avoided vs grid average</div>
+    </div>
+  </div>
+  <div style='margin-top:12px;padding:10px 14px;background:rgba(245,158,11,0.06);
+              border-radius:12px;border:1px solid rgba(245,158,11,0.15)'>
+    <span style='color:#94a3b8;font-size:.78rem'>
+      Assumes <b style="color:#64748b">20% rooftop coverage</b> of total area,
+      <b style="color:#64748b">60% usable</b> per rooftop.
+      Click on the map to exit area mode.
+    </span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── spotlight row (point data) ─────────────────────────────────────────────
+    loc_name = st.session_state.loc_name
+    best_month  = max(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
+    worst_month = min(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
+    best_val    = solar["ghi"].get(best_month) or 0
+    worst_val   = solar["ghi"].get(worst_month) or 0
+    _temp_vals  = [v for v in solar["temp"].values() if v is not None]
+    temp_avg    = round(sum(_temp_vals) / len(_temp_vals), 1) if _temp_vals else None
+    temp_penalty = max(0, (temp_avg - 25) * 0.4) if temp_avg is not None else 0
+
     spot_col, chart_col = st.columns([1, 1.8], gap="large")
 
     with spot_col:
-        best_month  = max(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
-        worst_month = min(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
-        best_val  = solar["ghi"].get(best_month)  or 0
-        worst_val = solar["ghi"].get(worst_month) or 0
-        _temp_vals = [v for v in solar["temp"].values() if v is not None]
-        temp_avg   = round(sum(_temp_vals) / len(_temp_vals), 1) if _temp_vals else None
-        # Temperature efficiency factor (panels lose ~0.4%/°C above 25°C)
-        temp_penalty = max(0, (temp_avg - 25) * 0.4) if temp_avg is not None else 0
-
         st.markdown(f"""
-<div class='glass fade-in' style='box-shadow:0 0 60px rgba(251,191,36,0.08)'>
+<div class='glass fade-in' style='box-shadow:0 0 60px rgba(251,191,36,0.06)'>
   <div style='display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px'>
     <div>
-      <div style='font-size:1.4rem;font-weight:800;color:#f1f5f9'>{loc['name']}</div>
-      <div style='color:#475569;font-size:.82rem;margin-top:2px'>{loc['country']}</div>
-      <div style='color:#334155;font-size:.72rem;margin-top:1px'>{lat:.2f}°, {lon:.2f}°</div>
+      <div style='font-size:1.3rem;font-weight:800;color:#f1f5f9'>{loc_name.split(",")[0]}</div>
+      <div style='color:#475569;font-size:.8rem;margin-top:2px'>{", ".join(loc_name.split(",")[1:]).strip()}</div>
+      <div style='color:#334155;font-size:.7rem;margin-top:1px'>{lat:.3f}°, {lon:.3f}°</div>
     </div>
-    <span class='badge' style='background:rgba(251,191,36,0.12);color:{sol_colour};
+    <span class='badge' style='background:rgba(251,191,36,0.1);color:{sol_colour};
           border:1px solid {sol_colour}50;margin-top:4px'>
       ☀ {sol_label}
     </span>
   </div>
 
-  <div style='text-align:center;padding:20px 0 16px'>
-    <div style='font-size:3.8rem;font-weight:900;color:{sol_colour};
-                font-family:Inter,sans-serif;line-height:1'>{annual_ghi:.2f}</div>
-    <div style='color:#64748b;font-size:.8rem;margin-top:4px'>kWh / m² / day  ·  annual average</div>
-    <div style='color:#475569;font-size:.78rem;margin-top:6px;
-                font-style:italic;max-width:200px;margin-left:auto;margin-right:auto'>
-      {sol_tagline}
-    </div>
+  <div style='text-align:center;padding:18px 0 14px'>
+    <div style='font-size:3.6rem;font-weight:900;color:{sol_colour};line-height:1'>{annual_ghi:.2f}</div>
+    <div style='color:#64748b;font-size:.78rem;margin-top:4px'>kWh / m² / day  ·  annual average</div>
+    <div style='color:#475569;font-size:.76rem;margin-top:6px;font-style:italic;
+                max-width:200px;margin-left:auto;margin-right:auto'>{sol_tagline}</div>
   </div>
 
   <div style='display:flex;gap:8px;margin-top:4px'>
     <div style='flex:1;background:rgba(255,255,255,0.025);border-radius:12px;
                 padding:10px;text-align:center'>
-      <div style='color:#475569;font-size:.65rem;text-transform:uppercase;
-                  letter-spacing:.08em;font-weight:600'>Best month</div>
+      <div style='color:#475569;font-size:.63rem;text-transform:uppercase;
+                  letter-spacing:.08em;font-weight:600'>Best</div>
       <div style='color:#fbbf24;font-weight:700;margin-top:3px'>{MONTHS[best_month-1]}</div>
-      <div style='color:#64748b;font-size:.75rem'>{best_val:.1f} kWh</div>
+      <div style='color:#64748b;font-size:.72rem'>{best_val:.1f} kWh</div>
     </div>
     <div style='flex:1;background:rgba(255,255,255,0.025);border-radius:12px;
                 padding:10px;text-align:center'>
-      <div style='color:#475569;font-size:.65rem;text-transform:uppercase;
-                  letter-spacing:.08em;font-weight:600'>Low month</div>
+      <div style='color:#475569;font-size:.63rem;text-transform:uppercase;
+                  letter-spacing:.08em;font-weight:600'>Low</div>
       <div style='color:#60a5fa;font-weight:700;margin-top:3px'>{MONTHS[worst_month-1]}</div>
-      <div style='color:#64748b;font-size:.75rem'>{worst_val:.1f} kWh</div>
+      <div style='color:#64748b;font-size:.72rem'>{worst_val:.1f} kWh</div>
     </div>
     <div style='flex:1;background:rgba(255,255,255,0.025);border-radius:12px;
                 padding:10px;text-align:center'>
-      <div style='color:#475569;font-size:.65rem;text-transform:uppercase;
-                  letter-spacing:.08em;font-weight:600'>Avg temp</div>
+      <div style='color:#475569;font-size:.63rem;text-transform:uppercase;
+                  letter-spacing:.08em;font-weight:600'>Temp</div>
       <div style='color:#f97316;font-weight:700;margin-top:3px'>{f"{temp_avg}°C" if temp_avg is not None else "—"}</div>
-      <div style='color:#64748b;font-size:.75rem'>{"−"+str(round(temp_penalty,1))+"% eff." if temp_penalty > 0.5 else "N/A" if temp_avg is None else "Ideal"}</div>
+      <div style='color:#64748b;font-size:.72rem'>
+        {"−"+str(round(temp_penalty,1))+"% eff" if temp_penalty > 0.5 else "n/a" if temp_avg is None else "ideal"}
+      </div>
     </div>
+  </div>
+
+  <div style='margin-top:10px;text-align:center'>
+    <span style='color:#334155;font-size:.68rem'>
+      Source: {solar.get("source","PVGIS")}
+    </span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
     with chart_col:
         st.markdown("<div class='glass'>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#64748b;font-size:.75rem;margin-bottom:4px;"
-                    "text-transform:uppercase;letter-spacing:.1em;font-weight:600'>"
-                    f"Monthly solar irradiance — 5-year average ({solar.get('source','NASA POWER')} 2019–2023)</p>",
-                    unsafe_allow_html=True)
-        st.plotly_chart(make_monthly_chart(solar, loc["name"]),
+        st.markdown(
+            f"<p style='color:#64748b;font-size:.73rem;margin-bottom:4px;"
+            f"text-transform:uppercase;letter-spacing:.1em;font-weight:600'>"
+            f"Monthly solar irradiance — 5-year avg (2019–2023)</p>",
+            unsafe_allow_html=True)
+        st.plotly_chart(make_monthly_chart(solar, loc_name),
                         use_container_width=True, key="monthly_chart")
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -564,7 +887,6 @@ def main():
         n_panels = st.slider("Number of panels", min_value=1, max_value=100, value=10,
                              help="Standard 400W panels, 1.7m² each")
         res = calc(annual_ghi, n_panels)
-
         st.markdown(f"""
 <div style='margin-top:12px'>
   <div style='display:flex;justify-content:space-between;padding:8px 0;
@@ -584,12 +906,12 @@ def main():
   </div>
   <div style='display:flex;justify-content:space-between;padding:8px 0;
               border-bottom:1px solid rgba(255,255,255,0.04)'>
-    <span style='color:#64748b;font-size:.82rem'>Installed cost (est.)</span>
+    <span style='color:#64748b;font-size:.82rem'>Installed cost</span>
     <span style='color:#f1f5f9;font-weight:600'>${res["cost_usd"]:,}</span>
   </div>
   <div style='display:flex;justify-content:space-between;padding:8px 0'>
     <span style='color:#64748b;font-size:.82rem'>Payback period</span>
-    <span style='color:#4ade80;font-weight:700'>{res["payback_yrs"]} years</span>
+    <span style='color:#4ade80;font-weight:700'>{res["payback_yrs"]} yrs</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -597,73 +919,59 @@ def main():
 
     with result_col:
         st.markdown("<div class='glass'>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#64748b;font-size:.75rem;margin-bottom:12px;"
+        st.markdown("<p style='color:#64748b;font-size:.73rem;margin-bottom:12px;"
                     "text-transform:uppercase;letter-spacing:.1em;font-weight:600'>"
                     "What your panels replace</p>", unsafe_allow_html=True)
-
         st.markdown(
-            power_item("🏠", "Homes powered (average)", f"{res['homes']}", f"at 3,500 kWh/yr per household") +
+            power_item("🏠", "Homes powered (avg)",   f"{res['homes']}",           "at 3,500 kWh/yr per household") +
             power_item("📱", "Phones charged per day", f"{res['phones_per_day']:,}", "based on 12 Wh per full charge") +
-            power_item("🌳", "Trees worth of CO₂/year", f"{res['co2_trees']:,}", f"{res['co2_kg']:,} kg CO₂ avoided annually") +
-            power_item("💡", "Equivalent LED bulb-years", f"{int(res['bulb_years']):,}", "10W bulb running 6 hours/day"),
+            power_item("🌳", "Trees worth of CO₂/yr", f"{res['co2_trees']:,}",      f"{res['co2_kg']:,} kg CO₂ avoided/yr") +
+            power_item("💡", "LED bulb-years",         f"{int(res['bulb_years']):,}", "10W bulb, 6 hours/day"),
             unsafe_allow_html=True)
-
-        # Monthly generation chart
-        st.markdown("<p style='color:#64748b;font-size:.72rem;margin:12px 0 4px;"
+        st.markdown("<p style='color:#64748b;font-size:.7rem;margin:12px 0 4px;"
                     "text-transform:uppercase;letter-spacing:.08em'>Monthly output</p>",
                     unsafe_allow_html=True)
         st.plotly_chart(make_generation_chart(solar, n_panels),
                         use_container_width=True, key="gen_chart")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── comparison ────────────────────────────────────────────────────────────
+    # ── comparison chart ───────────────────────────────────────────────────────
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-    st.markdown("<div class='glass'>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color:#64748b;font-size:.75rem;margin-bottom:4px;"
-                f"text-transform:uppercase;letter-spacing:.1em;font-weight:600'>"
-                f"{loc['name']} vs the world — where does it rank?</p>",
-                unsafe_allow_html=True)
-    # Find neighbours in the benchmark list
+    display_short = loc_name.split(",")[0].strip()
     better = [(k, v) for k, v in BENCHMARKS.items() if v < annual_ghi]
     worse  = [(k, v) for k, v in BENCHMARKS.items() if v >= annual_ghi]
-    if better:
-        nearest_lower = max(better, key=lambda x: x[1])
-        lower_txt = f"Better than {nearest_lower[0]} ({nearest_lower[1]} kWh/m²/day)"
-    else:
-        lower_txt = "Among the sunniest places on earth"
-    if worse:
-        nearest_higher = min(worse, key=lambda x: x[1])
-        higher_txt = f"Less sun than {nearest_higher[0]} ({nearest_higher[1]} kWh/m²/day)"
-    else:
-        higher_txt = "Top of the global solar rankings"
+    lower_txt  = (f"Better than {max(better, key=lambda x: x[1])[0]}"
+                  if better else "Among the sunniest on earth")
+    higher_txt = (f"Less sun than {min(worse, key=lambda x: x[1])[0]}"
+                  if worse  else "Top of global solar rankings")
 
+    st.markdown("<div class='glass'>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#64748b;font-size:.73rem;margin-bottom:8px;"
+                f"text-transform:uppercase;letter-spacing:.1em;font-weight:600'>"
+                f"{display_short} vs the world</p>", unsafe_allow_html=True)
     st.markdown(f"""
 <div style='display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap'>
-  <span style='color:#4ade80;font-size:.82rem;
-    background:rgba(74,222,128,0.08);padding:4px 12px;border-radius:999px'>
-    ✓ {lower_txt}
-  </span>
-  <span style='color:#94a3b8;font-size:.82rem;
-    background:rgba(255,255,255,0.04);padding:4px 12px;border-radius:999px'>
-    → {higher_txt}
-  </span>
+  <span style='color:#4ade80;font-size:.8rem;background:rgba(74,222,128,0.08);
+               padding:4px 12px;border-radius:999px'>✓ {lower_txt}</span>
+  <span style='color:#94a3b8;font-size:.8rem;background:rgba(255,255,255,0.04);
+               padding:4px 12px;border-radius:999px'>→ {higher_txt}</span>
 </div>""", unsafe_allow_html=True)
-    st.plotly_chart(make_comparison_chart(annual_ghi, loc["name"]),
+    st.plotly_chart(make_comparison_chart(annual_ghi, display_short),
                     use_container_width=True, key="compare_chart")
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── footer ────────────────────────────────────────────────────────────────
     st.divider()
-    st.markdown(f"""
+    st.markdown("""
 <div class='glass' style='border-color:rgba(255,255,255,0.04)'>
   <div style='display:flex;justify-content:space-between;align-items:flex-start;
               flex-wrap:wrap;gap:16px'>
     <div style='flex:2;min-width:260px'>
       <p style='color:#475569;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;
                 font-weight:600;margin:0 0 8px'>The uncomfortable truth about solar</p>
-      <p style='color:#94a3b8;margin:0;line-height:1.7;font-size:.9rem'>
+      <p style='color:#94a3b8;margin:0;line-height:1.7;font-size:.88rem'>
         The sunniest places on earth — the Sahel, South Asia, the Middle East —
-        are exactly the places with the most grid stress and the least energy access.
+        are exactly where grid stress is highest and energy access lowest.
         The resource and the need are perfectly aligned.
         The only thing missing is the capital to build it.
         <strong style='color:#64748b'>That's a financial problem, not a technical one.</strong>
