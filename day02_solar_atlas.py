@@ -284,8 +284,11 @@ def make_comparison_chart(my_ghi: float, my_name: str) -> go.Figure:
             lbl, c, _ = solar_class(row["ghi"])
             colours.append(c)
 
+    # Mark the searched city in the label — Plotly 6 doesn't accept list for tickfont.color
+    labels = ["▶ " + c if c == my_name else c for c in df["city"].tolist()]
+
     fig = go.Figure(go.Bar(
-        x=df["ghi"], y=df["city"],
+        x=df["ghi"], y=labels,
         orientation="h",
         marker_color=colours,
         hovertemplate="<b>%{y}</b><br>%{x:.2f} kWh/m²/day<extra></extra>",
@@ -294,16 +297,23 @@ def make_comparison_chart(my_ghi: float, my_name: str) -> go.Figure:
         textfont=dict(color="#64748b", size=9),
     ))
     fig.update_layout(
-        height=max(320, len(df)*22),
+        height=max(320, len(df) * 22),
         margin=dict(l=0, r=40, t=8, b=0),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
                    tickfont=dict(color="#64748b", size=9), ticksuffix=" kWh"),
-        yaxis=dict(showgrid=False, tickfont=dict(
-            color=["#ffffff" if c == "#ffffff" else "#64748b" for c in colours],
-            size=10)),
+        yaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10)),
     )
+    # Annotate the selected city's bar to make it stand out
+    my_row = df[df["city"] == my_name]
+    if not my_row.empty:
+        fig.add_annotation(
+            x=my_row["ghi"].values[0], y="▶ " + my_name,
+            text=" ← you", showarrow=False,
+            xanchor="left", font=dict(color="#ffffff", size=9),
+            xshift=4,
+        )
     return fig
 
 def make_generation_chart(solar_data: dict, n_panels: int) -> go.Figure:
