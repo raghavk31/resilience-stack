@@ -370,15 +370,16 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /* ── reset & base ───────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; }
 
-html, body, .stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"] {
+html, body { background: #0b0c10 !important; }
+
+.stApp,
+[data-testid="stAppViewContainer"] {
   background: #0b0c10 !important;
   font-family: 'Inter', system-ui, sans-serif !important;
   color: #d8dce8 !important;
-  overflow: hidden !important;
+  /* NO overflow:hidden — that clips the folium iframe */
 }
 
 /* ── hide chrome ────────────────────────────────────────────────────────── */
@@ -389,17 +390,13 @@ html, body, .stApp,
 footer,
 #MainMenu { display: none !important; }
 
-/* hide sidebar toggle */
 [data-testid="stSidebarCollapseButton"] { display: none !important; }
 
-/* ── main block: zero padding, full bleed ───────────────────────────────── */
-[data-testid="stMain"] > div,
-[data-testid="stMainBlockContainer"],
+/* ── main block: zero padding, full width ───────────────────────────────── */
 .main .block-container,
 [data-testid="block-container"] {
-  padding: 0 !important;
+  padding: 0 0 0 0 !important;
   max-width: 100% !important;
-  min-height: 100vh;
 }
 
 /* ── sidebar ────────────────────────────────────────────────────────────── */
@@ -409,7 +406,7 @@ footer,
   min-width: 355px !important;
   max-width: 355px !important;
   width: 355px !important;
-  overflow: hidden !important;
+  /* overflow on sidebar is fine — it only clips the sidebar panel */
 }
 [data-testid="stSidebar"] > div:first-child,
 [data-testid="stSidebarContent"] {
@@ -558,46 +555,12 @@ footer,
 .stat-row:last-child { border-bottom: none; }
 
 /* ── map area ───────────────────────────────────────────────────────────── */
-.map-area {
-  position: relative;
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
-}
-.map-area iframe,
-.map-area > div,
+/* Let folium iframe breathe — no overflow:hidden, no fixed height on wrapper */
+[data-testid="stFolium"] > div,
 .stFolium,
-[data-testid="stFolium"] {
-  height: 100vh !important;
-  min-height: 100vh !important;
-}
-.map-overlay-hint {
-  position: absolute;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(13,14,21,0.82);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 6px;
-  padding: 7px 16px;
-  font-size: 11px;
-  color: #4a5070;
-  letter-spacing: .04em;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 9999;
-}
-.bldg-legend {
-  position: absolute;
-  bottom: 40px;
-  right: 20px;
-  background: rgba(13,14,21,0.88);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 8px;
-  padding: 10px 14px;
-  z-index: 9999;
+iframe[title="streamlit_folium.st_folium"] {
+  border-radius: 0 !important;
+  border: none !important;
 }
 .bleg-row {
   display: flex; align-items: center; gap: 7px;
@@ -900,13 +863,11 @@ def main():
                   buildings=buildings if show_bldgs else None,
                   area_coords=st.session_state.area_coords)
 
-    st.markdown("<div class='map-area'>", unsafe_allow_html=True)
     map_data = st_folium(m,
         returned_objects=["last_clicked", "last_active_drawing", "bounds", "zoom"],
         key="solar_map",
-        height=900,
+        height=750,
         use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # Hint overlay (rendered below map in DOM but styled to look overlaid)
     if show_bldgs and buildings:
