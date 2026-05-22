@@ -110,7 +110,8 @@ HEADERS = {"User-Agent": "ResilienceStack/1.0"}
 
 def _get_session():
     s = requests.Session()
-    retry = urllib3.Retry(total=3, backoff_factor=0.5,
+    # total=2: don't hammer slow servers; backoff is irrelevant at 8 s timeout
+    retry = urllib3.Retry(total=2, backoff_factor=0.3,
                           status_forcelist=[429,500,502,503,504])
     s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retry))
     s.headers.update(HEADERS)
@@ -135,12 +136,12 @@ def geocode(query: str):
     except Exception:
         return None
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=86400*30, show_spinner=False, persist="disk")
 def reverse_geocode(lat: float, lon: float) -> str:
     try:
         r = requests.get(NOMINATIM,
             params={"lat": lat, "lon": lon, "format": "jsonv2"},
-            headers=HEADERS, timeout=8)
+            headers=HEADERS, timeout=5)
         r.raise_for_status()
         addr = r.json().get("address", {})
         city = (addr.get("city") or addr.get("town") or addr.get("village")
@@ -158,7 +159,7 @@ def _month_avg(d):
         avgs[m] = round(sum(vals)/len(vals), 3) if vals else None
     return avgs
 
-@st.cache_data(ttl=86400*30, show_spinner=False)
+@st.cache_data(ttl=86400*30, show_spinner=False, persist="disk")
 def fetch_solar(lat: float, lon: float):
     sess = _get_session()
     # 1. PVGIS
@@ -166,7 +167,7 @@ def fetch_solar(lat: float, lon: float):
         r = sess.get(PVGIS_URL, params={
             "lat": round(lat,4), "lon": round(lon,4),
             "startyear": 2019, "endyear": 2023,
-            "horirrad": 1, "outputformat": "json", "browser": 0}, timeout=30)
+            "horirrad": 1, "outputformat": "json", "browser": 0}, timeout=8)
         r.raise_for_status()
         rows = r.json().get("outputs",{}).get("monthly",[])
         if rows:
@@ -190,7 +191,7 @@ def fetch_solar(lat: float, lon: float):
         r = sess.get(NASA_URL, params={
             "parameters":"ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN,T2M",
             "community":"RE","longitude":round(lon,4),"latitude":round(lat,4),
-            "start":2019,"end":2023,"format":"JSON"}, timeout=30)
+            "start":2019,"end":2023,"format":"JSON"}, timeout=8)
         r.raise_for_status()
         data = r.json()["properties"]["parameter"]
         ghi  = _month_avg(data["ALLSKY_SFC_SW_DWN"])
@@ -208,7 +209,7 @@ def fetch_solar(lat: float, lon: float):
         r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
             "latitude":round(lat,4),"longitude":round(lon,4),
             "start_date":"2019-01-01","end_date":"2023-12-31",
-            "daily":"shortwave_radiation_sum","timezone":"UTC"}, timeout=30)
+            "daily":"shortwave_radiation_sum","timezone":"UTC"}, timeout=8)
         r.raise_for_status()
         daily = r.json().get("daily", {})
         ms: dict = defaultdict(list)
@@ -703,9 +704,12 @@ def _init():
         map_zoom=12, mode="point",
         area_bounds=None, area_coords=None,
         viewport_bounds=None,
-        # KEY: tracks the coordinates of the last click we actually processed.
-        # Comparing new clicks against this (not against lat/lon) prevents the
-        # snap-back bug where stale last_clicked fires after a search rerun.
+        # nav_id: incremented each time we navigate programmatically (search).
+        # Used as part of the st_folium key so the component is FULLY RECREATED
+        # on each search — eliminating all stale last_clicked state.
+        nav_id=0,
+        # last_click: the coords of the last click we processed within the
+        # current nav session. Prevents double-processing the same click on reruns.
         last_click=None,
     )
     for k, v in defs.items():
@@ -723,6 +727,14 @@ def main():
     lon  = st.session_state.lon
     zoom = st.session_state.map_zoom
     name = st.session_state.loc_name
+
+    # Lazy geocoding: if loc_name is still raw coordinates (set on click for speed),
+    # resolve it now. reverse_geocode is disk-cached so this is fast on repeat visits.
+    if name and ("°N" in name or "°S" in name) and "," in name and len(name) < 30:
+        resolved = reverse_geocode(round(lat, 4), round(lon, 4))
+        if resolved:
+            st.session_state.loc_name = resolved
+            name = resolved
 
     solar = fetch_solar(lat, lon)
     ghi   = solar["annual"] if solar else 0.0
@@ -776,13 +788,16 @@ def main():
                 st.session_state.lon      = loc["lon"]
                 st.session_state.loc_name = (
                     f"{loc['name']}{', '+loc['admin'] if loc['admin'] else ''}, {loc['country']}")
-                st.session_state.map_zoom       = 12
-                st.session_state.mode           = "point"
-                st.session_state.area_bounds    = None
-                st.session_state.area_coords    = None
+                st.session_state.map_zoom        = 12
+                st.session_state.mode            = "point"
+                st.session_state.area_bounds     = None
+                st.session_state.area_coords     = None
                 st.session_state.viewport_bounds = None
-                # Do NOT reset last_click here — we want old stale clicks to remain
-                # "already processed" so they don't fire on the next render.
+                # Increment nav_id → st_folium gets a new key → fresh component
+                # with zero stale last_clicked state. This is the definitive fix
+                # for snap-back: a new key means a new Leaflet instance.
+                st.session_state.nav_id    += 1
+                st.session_state.last_click = None   # fresh component, no click history
                 st.rerun()
             else:
                 st.error("Location not found.")
@@ -1012,9 +1027,13 @@ def main():
                   buildings=buildings if show_bldgs else None,
                   area_coords=st.session_state.area_coords)
 
+    # KEY includes nav_id: each search creates a brand-new Leaflet component
+    # with zero memory of previous clicks. Clicks within the same nav session
+    # are deduplicated by last_click comparison below.
+    nav_id = st.session_state.nav_id
     map_data = st_folium(m,
         returned_objects=["last_clicked","last_active_drawing","bounds","zoom"],
-        key="solar_map",
+        key=f"solar_map_{nav_id}",
         height=840,
         use_container_width=True)
 
@@ -1050,11 +1069,10 @@ def main():
                 st.rerun()
 
         # ── click → move brush ─────────────────────────────────────────────
-        # FIX (V6): Compare incoming click against last_click (the coordinates
-        # we last processed), NOT against the current session lat/lon.
-        # When a search fires a rerun, lat/lon changes but last_click stays at
-        # the old position — so the stale st_folium last_clicked matches
-        # last_click and is correctly ignored.
+        # nav_id handles search-triggered resets (new component = no stale state).
+        # last_click handles deduplication within a navigation session:
+        # after a click fires a rerun, st_folium re-serves the same last_clicked
+        # — comparing against last_click tells us we already processed it.
         click = map_data.get("last_clicked")
         if click:
             new_lat = round(click["lat"], 5)
@@ -1066,14 +1084,16 @@ def main():
                 abs(new_lon - lc["lng"]) > 0.00005
             )
             if is_new_click:
-                # Store FIRST — prevents double-processing on rapid reruns
+                # Store click coords BEFORE rerun to prevent double-processing.
+                # Skip reverse_geocode here (HTTP call) — show coordinates
+                # immediately; the render phase will geocode via cached call.
                 st.session_state.last_click  = {"lat": new_lat, "lng": new_lon}
                 st.session_state.lat         = new_lat
                 st.session_state.lon         = new_lon
                 st.session_state.mode        = "point"
                 st.session_state.area_bounds = None
                 st.session_state.area_coords = None
-                st.session_state.loc_name    = reverse_geocode(new_lat, new_lon)
+                st.session_state.loc_name    = f"{new_lat:.4f}°N, {new_lon:.4f}°E"
                 st.rerun()
 
         if zoom_crossed:
