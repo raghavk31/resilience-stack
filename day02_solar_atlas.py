@@ -161,15 +161,42 @@ def _month_avg(d):
 
 @st.cache_data(ttl=86400*30, show_spinner=False, persist="disk")
 def fetch_solar(lat: float, lon: float):
+    """Try three solar APIs in speed order. Results are disk-cached for 30 days."""
     sess = _get_session()
-    # 1. PVGIS
+
+    # 1. Open-Meteo ERA5 — global CDN, usually 1-3 s; 2 years keeps payload small
+    try:
+        r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
+            "latitude": round(lat, 4), "longitude": round(lon, 4),
+            "start_date": "2022-01-01", "end_date": "2023-12-31",
+            "daily": "shortwave_radiation_sum", "timezone": "UTC",
+        }, timeout=7)
+        r.raise_for_status()
+        daily = r.json().get("daily", {})
+        ms: dict = defaultdict(list)
+        for d, v in zip(daily.get("time", []), daily.get("shortwave_radiation_sum", [])):
+            if v is not None and v >= 0:
+                ms[int(d[5:7])].append(v / 3.6)
+        ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in ms.items() if vs}
+        clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}
+        temp = {m: None for m in range(1, 13)}
+        valid = list(ghi.values())
+        if len(valid) >= 10:
+            return {"ghi": ghi, "clear": clr, "temp": temp,
+                    "annual": round(sum(valid)/len(valid), 3),
+                    "source": "Open-Meteo ERA5"}
+    except Exception:
+        pass
+
+    # 2. PVGIS EU JRC — most accurate; EU server can be slow from Asia
     try:
         r = sess.get(PVGIS_URL, params={
-            "lat": round(lat,4), "lon": round(lon,4),
-            "startyear": 2019, "endyear": 2023,
-            "horirrad": 1, "outputformat": "json", "browser": 0}, timeout=8)
+            "lat": round(lat, 4), "lon": round(lon, 4),
+            "startyear": 2022, "endyear": 2023,
+            "horirrad": 1, "outputformat": "json", "browser": 0,
+        }, timeout=8)
         r.raise_for_status()
-        rows = r.json().get("outputs",{}).get("monthly",[])
+        rows = r.json().get("outputs", {}).get("monthly", [])
         if rows:
             sums: dict = defaultdict(list)
             for row in rows:
@@ -177,7 +204,7 @@ def fetch_solar(lat: float, lon: float):
                 if hm and hm > 0:
                     sums[m].append(hm / monthrange(yr, m)[1])
             ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in sums.items() if vs}
-            clr  = {m: round(v*1.18, 3) for m, v in ghi.items()}
+            clr  = {m: round(v * 1.18, 3) for m, v in ghi.items()}
             temp = {m: None for m in range(1, 13)}
             valid = [v for v in ghi.values() if v and v > 0]
             if len(valid) >= 10:
@@ -186,12 +213,14 @@ def fetch_solar(lat: float, lon: float):
                         "source": "PVGIS · EU JRC"}
     except Exception:
         pass
-    # 2. NASA POWER
+
+    # 3. NASA POWER — reliable fallback
     try:
         r = sess.get(NASA_URL, params={
-            "parameters":"ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN,T2M",
-            "community":"RE","longitude":round(lon,4),"latitude":round(lat,4),
-            "start":2019,"end":2023,"format":"JSON"}, timeout=8)
+            "parameters": "ALLSKY_SFC_SW_DWN,CLRSKY_SFC_SW_DWN,T2M",
+            "community": "RE", "longitude": round(lon, 4), "latitude": round(lat, 4),
+            "start": 2022, "end": 2023, "format": "JSON",
+        }, timeout=8)
         r.raise_for_status()
         data = r.json()["properties"]["parameter"]
         ghi  = _month_avg(data["ALLSKY_SFC_SW_DWN"])
@@ -204,28 +233,7 @@ def fetch_solar(lat: float, lon: float):
                     "source": "NASA POWER"}
     except Exception:
         pass
-    # 3. Open-Meteo
-    try:
-        r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
-            "latitude":round(lat,4),"longitude":round(lon,4),
-            "start_date":"2019-01-01","end_date":"2023-12-31",
-            "daily":"shortwave_radiation_sum","timezone":"UTC"}, timeout=8)
-        r.raise_for_status()
-        daily = r.json().get("daily", {})
-        ms: dict = defaultdict(list)
-        for d, v in zip(daily.get("time",[]), daily.get("shortwave_radiation_sum",[])):
-            if v is not None and v >= 0:
-                ms[int(d[5:7])].append(v / 3.6)
-        ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in ms.items() if vs}
-        clr  = {m: round(v*1.15, 3) for m, v in ghi.items()}
-        temp = {m: None for m in range(1, 13)}
-        valid = list(ghi.values())
-        if valid:
-            return {"ghi": ghi, "clear": clr, "temp": temp,
-                    "annual": round(sum(valid)/len(valid), 3),
-                    "source": "Open-Meteo ERA5"}
-    except Exception:
-        pass
+
     return None
 
 # ── buildings ──────────────────────────────────────────────────────────────────
@@ -728,15 +736,8 @@ def main():
     zoom = st.session_state.map_zoom
     name = st.session_state.loc_name
 
-    # Lazy geocoding: if loc_name is still raw coordinates (set on click for speed),
-    # resolve it now. reverse_geocode is disk-cached so this is fast on repeat visits.
-    if name and ("°N" in name or "°S" in name) and "," in name and len(name) < 30:
-        resolved = reverse_geocode(round(lat, 4), round(lon, 4))
-        if resolved:
-            st.session_state.loc_name = resolved
-            name = resolved
-
-    solar = fetch_solar(lat, lon)
+    with st.spinner("Fetching solar data…"):
+        solar = fetch_solar(lat, lon)
     ghi   = solar["annual"] if solar else 0.0
     lbl   = solar_class(ghi)
     col   = gsa_color(ghi)
@@ -821,7 +822,8 @@ def main():
   <div style='font-size:15px;font-weight:600;color:#1e2240;letter-spacing:-.01em'>{short}</div>
   <div class='muted' style='margin-top:1px'>{rest}</div>
   <div style='font-size:9px;color:#9aa0b8;margin-top:1px;letter-spacing:.04em'>
-    {lat:.4f}°N &nbsp; {lon:.4f}°E
+    {lat:.4f}°N &nbsp; {lon:.4f}°E &nbsp;
+    <span style='color:#c0c8dc'>nav#{st.session_state.nav_id}</span>
   </div>
 </div>
 
@@ -1069,32 +1071,39 @@ def main():
                 st.rerun()
 
         # ── click → move brush ─────────────────────────────────────────────
-        # nav_id handles search-triggered resets (new component = no stale state).
-        # last_click handles deduplication within a navigation session:
-        # after a click fires a rerun, st_folium re-serves the same last_clicked
-        # — comparing against last_click tells us we already processed it.
+        # Three-layer defence against spurious/stale click events:
+        #   1. nav_id key  — fresh Leaflet component on every search = no old state
+        #   2. Viewport guard — stale clicks from a previous location will be
+        #      outside the current map bounds; only in-view clicks are real
+        #   3. last_click dedup — same coords on rerun after st.rerun() = ignore
         click = map_data.get("last_clicked")
         if click:
             new_lat = round(click["lat"], 5)
             new_lon = round(click["lng"], 5)
-            lc = st.session_state.last_click
-            is_new_click = (
-                lc is None or
-                abs(new_lat - lc["lat"]) > 0.00005 or
-                abs(new_lon - lc["lng"]) > 0.00005
-            )
-            if is_new_click:
-                # Store click coords BEFORE rerun to prevent double-processing.
-                # Skip reverse_geocode here (HTTP call) — show coordinates
-                # immediately; the render phase will geocode via cached call.
-                st.session_state.last_click  = {"lat": new_lat, "lng": new_lon}
-                st.session_state.lat         = new_lat
-                st.session_state.lon         = new_lon
-                st.session_state.mode        = "point"
-                st.session_state.area_bounds = None
-                st.session_state.area_coords = None
-                st.session_state.loc_name    = f"{new_lat:.4f}°N, {new_lon:.4f}°E"
-                st.rerun()
+
+            # Layer 2: is this click inside the map we're currently showing?
+            vp = st.session_state.viewport_bounds   # already updated above
+            in_vp = True                            # permissive when vp unknown
+            if vp:
+                margin = 0.05   # ~5 km tolerance for edge clicks
+                in_vp = (vp["south"] - margin <= new_lat <= vp["north"] + margin and
+                         vp["west"]  - margin <= new_lon <= vp["east"]  + margin)
+
+            if in_vp:
+                # Layer 3: is this a new click or the same one re-served on rerun?
+                lc = st.session_state.last_click
+                is_new = (lc is None or
+                          abs(new_lat - lc["lat"]) > 0.00005 or
+                          abs(new_lon - lc["lng"]) > 0.00005)
+                if is_new:
+                    st.session_state.last_click  = {"lat": new_lat, "lng": new_lon}
+                    st.session_state.lat         = new_lat
+                    st.session_state.lon         = new_lon
+                    st.session_state.mode        = "point"
+                    st.session_state.area_bounds = None
+                    st.session_state.area_coords = None
+                    st.session_state.loc_name    = reverse_geocode(new_lat, new_lon)
+                    st.rerun()
 
         if zoom_crossed:
             st.rerun()
