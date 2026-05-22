@@ -304,64 +304,60 @@ def build_map(lat, lon, zoom, ghi, buildings=None, area_coords=None):
 
 # ── charts ─────────────────────────────────────────────────────────────────────
 def chart_monthly(solar) -> go.Figure:
-    vals  = [solar["ghi"].get(m) or 0 for m in range(1,13)]
-    clear = [solar["clear"].get(m) or 0 for m in range(1,13)]
-    cols  = []
-    for v in vals:
-        if v >= 6.5:   cols.append("#f0a040")
-        elif v >= 5.5: cols.append("#d4824a")
-        elif v >= 4.5: cols.append("#c8b044")
-        elif v >= 3.5: cols.append("#5aab78")
-        else:          cols.append("#4888c8")
+    """P2: single amber colour, no grid, no tick labels, no clear-sky line.
+    The shape speaks; colour does not classify."""
+    vals = [solar["ghi"].get(m) or 0 for m in range(1, 13)]
+    # Highlight peak + trough only; rest are uniform amber at low opacity
+    peak = max(range(12), key=lambda i: vals[i])
+    cols = ["rgba(240,160,64,0.28)"] * 12
+    cols[peak] = "rgba(240,160,64,0.85)"
 
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=MONTHS_3, y=vals, marker_color=cols, marker_opacity=0.9,
-        hovertemplate="<b>%{x}</b>  %{y:.2f} kWh/m²/day<extra></extra>"))
-    fig.add_trace(go.Scatter(x=MONTHS_3, y=clear, mode="lines",
-        line=dict(color="rgba(255,255,255,0.15)", width=1.5, dash="dot"),
-        hovertemplate="Clear-sky: %{y:.2f}<extra></extra>", showlegend=False))
+    fig = go.Figure(go.Bar(
+        x=MONTHS_3, y=vals,
+        marker_color=cols,
+        hovertemplate="<b>%{x}</b>  %{y:.2f} kWh/m²/day<extra></extra>",
+    ))
     fig.update_layout(
-        height=130, margin=dict(l=0,r=0,t=4,b=0), showlegend=False,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False, tickfont=dict(color="#3e4260", size=9),
+        height=110,
+        margin=dict(l=0, r=0, t=2, b=0),
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, showticklabels=True,
+                   tickfont=dict(color="#2c2f48", size=8),
                    tickmode="array", tickvals=MONTHS_3),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
-                   tickfont=dict(color="#3e4260", size=8), showticklabels=True,
-                   nticks=4),
-        bargap=0.18)
+        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+        bargap=0.22,
+    )
     return fig
 
 def chart_rank(my_ghi, my_name) -> go.Figure:
-    data = dict(BENCHMARKS)
+    """P2: grey bars for all cities, single amber bar for selected.
+    No text annotations on bars — values in hover only."""
+    data  = dict(BENCHMARKS)
     short = my_name.split(",")[0].strip()
     data[short] = my_ghi
     df = pd.DataFrame({"city": list(data.keys()), "ghi": list(data.values())})
     df = df.sort_values("ghi", ascending=True)
-    cols, opacities = [], []
-    for _, row in df.iterrows():
-        if row["city"] == short:
-            cols.append("#f0a040"); opacities.append(1.0)
-        else:
-            _, c, _ = solar_class(row["ghi"])
-            cols.append(c); opacities.append(0.55)
-    labels = ["▶ " + c if c == short else c for c in df["city"].tolist()]
+
+    cols = ["rgba(240,160,64,0.9)" if c == short
+            else "rgba(255,255,255,0.1)" for c in df["city"]]
+    labels = [c if c != short else f"{c} ◀" for c in df["city"].tolist()]
+
     fig = go.Figure(go.Bar(
         x=df["ghi"], y=labels, orientation="h",
-        marker_color=cols, marker_opacity=opacities,
+        marker_color=cols,
         hovertemplate="<b>%{y}</b>  %{x:.2f} kWh/m²/day<extra></extra>",
-        text=[f"{v:.1f}" for v in df["ghi"]], textposition="outside",
-        textfont=dict(color="#3e4260", size=8)))
+    ))
     fig.update_layout(
-        height=max(280, len(df)*20), margin=dict(l=0,r=36,t=4,b=0),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.04)",
-                   tickfont=dict(color="#3e4260", size=8), range=[0, 8.5]),
-        yaxis=dict(showgrid=False, tickfont=dict(color="#606888", size=9)))
-    my_row = df[df["city"] == short]
-    if not my_row.empty:
-        fig.add_annotation(x=my_row["ghi"].values[0], y="▶ " + short,
-            text="  ◀ you", showarrow=False, xanchor="left",
-            font=dict(color="#f0a040", size=8))
+        height=max(260, len(df) * 18),
+        margin=dict(l=0, r=8, t=2, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+        yaxis=dict(showgrid=False,
+                   tickfont=dict(color="#404468", size=9)),
+    )
     return fig
 
 # ══ CSS ════════════════════════════════════════════════════════════════════════
@@ -469,90 +465,95 @@ footer,
 [data-testid="stSidebar"] .js-plotly-plot .plotly { background: transparent !important; }
 
 /* ── design tokens as utility classes ───────────────────────────────────── */
+/* P1: tighter padding, invisible labels, flatter radius everywhere */
 .section {
-  padding: 20px 24px;
+  padding: 14px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.048);
 }
-.section-last { padding: 20px 24px 28px; }
+.section-last { padding: 14px 20px 24px; }
+
+/* Labels: barely there — #2c2f48, not readable from across the room */
 .label {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: .14em;
+  letter-spacing: .15em;
   text-transform: uppercase;
-  color: #3e4260;
+  color: #2c2f48;
   margin-bottom: 2px;
 }
 .label-md {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: .12em;
+  letter-spacing: .13em;
   text-transform: uppercase;
-  color: #4a5070;
-  margin-bottom: 10px;
+  color: #323656;
+  margin-bottom: 8px;
 }
+
+/* Hero: 36px, weight 700, always cool off-white — colour lives in badge only */
 .hero-val {
-  font-size: 46px;
-  font-weight: 800;
-  letter-spacing: -.03em;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -.025em;
   line-height: 1;
   color: #eef0f8;
   font-variant-numeric: tabular-nums;
 }
 .hero-unit {
-  font-size: 12px;
-  color: #3e4260;
-  letter-spacing: .06em;
-  margin-top: 5px;
+  font-size: 11px;
+  color: #2c2f48;
+  letter-spacing: .07em;
+  margin-top: 4px;
 }
+
+/* Flatten secondary value sizes — less jumping hierarchy */
 .val-lg {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -.02em;
-  color: #d8dce8;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+  color: #d4d8e8;
 }
 .val-md {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  color: #c8ccd8;
+  color: #b8bcd0;
 }
-.muted { color: #4a5070; font-size: 11px; }
+.muted { color: #404468; font-size: 11px; }
 .accent { color: #f0a040; }
+
 .divider {
   height: 1px;
   background: rgba(255,255,255,0.048);
-  margin: 16px 0;
+  margin: 12px 0;
 }
+
+/* Badge: just text + colour, no border, no background */
 .badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 9px;
-  border-radius: 4px;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: .12em;
   text-transform: uppercase;
+  padding: 2px 0;
 }
+
 .row { display: flex; align-items: baseline; gap: 6px; }
+
+/* Grid-2: no rounded corners, no card backgrounds */
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 10px;
-  overflow: hidden;
+  gap: 0;
   margin-top: 10px;
 }
-.grid-cell {
-  background: #0d0e15;
-  padding: 12px 14px;
-}
+.grid-cell { padding: 10px 0; }
+
+/* stat-row: spacing only, no separator lines */
 .stat-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 6px 0;
 }
-.stat-row:last-child { border-bottom: none; }
 
 /* ── map area ───────────────────────────────────────────────────────────── */
 /* Let folium iframe breathe — no overflow:hidden, no fixed height on wrapper */
@@ -572,13 +573,19 @@ iframe[title="streamlit_folium.st_folium"] {
 }
 .bleg-lbl { font-size: 9.5px; color: #4a5070; }
 
-/* area analysis card (in sidebar) */
+/* area analysis card: flat, minimal border */
 .area-card {
-  background: rgba(240,160,64,0.05);
-  border: 1px solid rgba(240,160,64,0.15);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-top: 10px;
+  border-left: 2px solid rgba(240,160,64,0.4);
+  padding: 10px 0 10px 12px;
+  margin-top: 8px;
+}
+
+/* sidebar input / button: flatten radius */
+[data-testid="stSidebar"] [data-testid="stTextInput"] > div > div > input {
+  border-radius: 3px !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+  border-radius: 3px !important;
 }
 </style>
 """
@@ -595,25 +602,13 @@ def _row(label, value, colour="#d8dce8", sub=""):
   <span style='font-size:13px;font-weight:600;color:{colour}'>{value}{sub_html}</span>
 </div>"""
 
-def _grid_cell(label, val, col="#d8dce8"):
-    return f"""<div class='grid-cell'>
-  <div class='label'>{label}</div>
-  <div class='val-md' style='color:{col};margin-top:4px'>{val}</div>
-</div>"""
-
-def _power_row(icon, val, label):
-    return f"""<div style='display:flex;align-items:center;gap:10px;
-        padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04)'>
-  <span style='font-size:14px;width:20px;text-align:center'>{icon}</span>
-  <span class='muted' style='flex:1'>{label}</span>
-  <span style='font-size:12px;font-weight:600;color:#c8ccd8'>{val}</span>
-</div>"""
 
 # ══ SESSION STATE ══════════════════════════════════════════════════════════════
 def _init():
     defs = dict(lat=19.076, lon=72.878, loc_name="Mumbai",
                 map_zoom=12, mode="point",
-                area_bounds=None, area_coords=None, prev_click=None)
+                area_bounds=None, area_coords=None,
+                prev_click=None, viewport_bounds=None)
     for k, v in defs.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -635,12 +630,16 @@ def main():
     ghi   = solar["annual"] if solar else 0.0
     sol_lbl, sol_col, sol_tag = solar_class(ghi)
 
-    # Buildings if zoomed in
-    buildings = []
+    # Buildings if zoomed in — use viewport bounds when available (stored from last rerun)
+    buildings  = []
     show_bldgs = zoom >= 14
     if show_bldgs and solar:
-        delta = max(0.003, 0.035 / (2 ** (zoom - 14)))
-        buildings = get_buildings(lat-delta, lon-delta, lat+delta, lon+delta)
+        vp = st.session_state.get("viewport_bounds")
+        if vp:
+            buildings = get_buildings(vp["south"], vp["west"], vp["north"], vp["east"])
+        else:
+            delta     = max(0.003, 0.035 / (2 ** (zoom - 14)))
+            buildings = get_buildings(lat-delta, lon-delta, lat+delta, lon+delta)
 
     # ══════════════════════════════════════════════════════════════════════════
     # SIDEBAR
@@ -703,49 +702,47 @@ def main():
         worst_m  = min(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
 
         st.markdown(_sec(f"""
-<div style='margin-bottom:14px'>
-  <div style='font-size:17px;font-weight:700;color:#eef0f8;letter-spacing:-.02em'>
+<div style='margin-bottom:12px'>
+  <div style='font-size:15px;font-weight:600;color:#eef0f8;letter-spacing:-.01em'>
     {short_name}
   </div>
   <div class='muted' style='margin-top:2px'>{rest_name}</div>
-  <div class='muted' style='margin-top:1px;font-size:10px'>{lat:.4f}°&thinsp;N &nbsp;{lon:.4f}°&thinsp;E</div>
-</div>
-<div style='display:flex;align-items:flex-end;justify-content:space-between'>
-  <div>
-    <div class='label'>ANNUAL AVERAGE GHI</div>
-    <div style='display:flex;align-items:baseline;gap:6px;margin-top:4px'>
-      <span class='hero-val' style='color:{sol_col}'>{ghi:.2f}</span>
-      <span class='hero-unit'>kWh / m² / day</span>
-    </div>
+  <div style='font-size:9px;color:#2c2f48;margin-top:2px;letter-spacing:.04em'>
+    {lat:.4f}° N &nbsp; {lon:.4f}° E
   </div>
-  <span class='badge' style='background:{sol_col}18;color:{sol_col};
-    border:1px solid {sol_col}40;margin-bottom:4px'>
-    ● {sol_lbl}
-  </span>
 </div>
-<div class='muted' style='margin-top:6px;font-style:italic'>{sol_tag}</div>
+
+<div class='label'>ANNUAL AVERAGE GHI</div>
+<div style='display:flex;align-items:baseline;gap:8px;margin-top:5px'>
+  <span class='hero-val'>{ghi:.2f}</span>
+  <span class='hero-unit'>kWh / m² / day</span>
+  <span class='badge' style='color:{sol_col};margin-left:4px'>{sol_lbl}</span>
+</div>
+<div style='font-size:10px;color:#2c2f48;margin-top:4px;font-style:italic'>{sol_tag}</div>
+
 <div class='divider'></div>
-<div style='display:flex;gap:0'>
-  <div style='flex:1'>
-    <div class='label'>PEAK MONTH</div>
-    <div style='font-size:14px;font-weight:600;color:#f0a040;margin-top:3px'>
+
+<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:0'>
+  <div>
+    <div class='label'>PEAK</div>
+    <div style='font-size:13px;font-weight:600;color:#d4d8e8;margin-top:3px'>
       {MONTHS[best_m-1]}
     </div>
-    <div class='muted'>{solar["ghi"].get(best_m,0):.1f} kWh</div>
+    <div style='font-size:10px;color:#2c2f48;margin-top:1px'>{solar["ghi"].get(best_m,0):.1f} kWh</div>
   </div>
-  <div style='flex:1'>
-    <div class='label'>LOW MONTH</div>
-    <div style='font-size:14px;font-weight:600;color:#4888c8;margin-top:3px'>
+  <div>
+    <div class='label'>LOW</div>
+    <div style='font-size:13px;font-weight:600;color:#d4d8e8;margin-top:3px'>
       {MONTHS[worst_m-1]}
     </div>
-    <div class='muted'>{solar["ghi"].get(worst_m,0):.1f} kWh</div>
+    <div style='font-size:10px;color:#2c2f48;margin-top:1px'>{solar["ghi"].get(worst_m,0):.1f} kWh</div>
   </div>
-  <div style='flex:1'>
+  <div>
     <div class='label'>AVG TEMP</div>
-    <div style='font-size:14px;font-weight:600;color:#5aab78;margin-top:3px'>
-      {f"{temp_avg}°C" if temp_avg is not None else "—"}
+    <div style='font-size:13px;font-weight:600;color:#d4d8e8;margin-top:3px'>
+      {f"{temp_avg} °C" if temp_avg is not None else "—"}
     </div>
-    <div class='muted'>{"panel loss" if temp_avg and temp_avg>28 else "source"}: {solar.get("source","PVGIS")[:6]}</div>
+    <div style='font-size:10px;color:#2c2f48;margin-top:1px'>{solar.get("source","PVGIS")[:8]}</div>
   </div>
 </div>
 """), unsafe_allow_html=True)
@@ -764,37 +761,38 @@ def main():
             ar = calc_area_solar(st.session_state.area_bounds, ghi)
             bs = st.session_state.area_bounds
             st.markdown(_sec(f"""
-<div class='label-md' style='color:#f0a040'>
-  📐 AREA ANALYSIS
+<div style='display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px'>
+  <span class='label-md' style='color:#f0a040;margin-bottom:0'>AREA ANALYSIS</span>
+  <span style='font-size:9px;color:#2c2f48'>{ar["area_km2"]} km²</span>
 </div>
-<div class='muted' style='margin-bottom:10px'>
-  {bs["south"]:.3f}°–{bs["north"]:.3f}°N &nbsp;·&nbsp; {ar["area_km2"]} km²
+<div style='font-size:9px;color:#2c2f48;margin-bottom:10px'>
+  {bs["south"]:.3f}°–{bs["north"]:.3f}°N · {bs["west"]:.3f}°–{bs["east"]:.3f}°E
 </div>
 <div class='area-card'>
-  <div style='display:grid;grid-template-columns:1fr 1fr;gap:12px'>
+  <div style='display:grid;grid-template-columns:1fr 1fr;row-gap:14px'>
     <div>
       <div class='label'>SOLAR POTENTIAL</div>
-      <div class='val-lg accent' style='margin-top:4px'>{ar["mwh_yr"]:,}</div>
-      <div class='muted'>MWh / year</div>
+      <div class='val-lg' style='color:#f0a040;margin-top:4px'>{ar["mwh_yr"]:,}</div>
+      <div style='font-size:10px;color:#2c2f48;margin-top:1px'>MWh / year</div>
     </div>
     <div>
       <div class='label'>HOMES POWERED</div>
-      <div class='val-lg' style='color:#5aab78;margin-top:4px'>{ar["homes"]:,}</div>
-      <div class='muted'>at 3,500 kWh/yr</div>
+      <div class='val-lg' style='margin-top:4px'>{ar["homes"]:,}</div>
+      <div style='font-size:10px;color:#2c2f48;margin-top:1px'>at 3,500 kWh/yr</div>
     </div>
     <div>
       <div class='label'>PANELS NEEDED</div>
       <div class='val-md' style='margin-top:4px'>{ar["panels"]:,}</div>
-      <div class='muted'>{ar["rooftop_m2"]:,} m² roof</div>
+      <div style='font-size:10px;color:#2c2f48;margin-top:1px'>{ar["rooftop_m2"]:,} m² roof</div>
     </div>
     <div>
       <div class='label'>CO₂ AVOIDED</div>
-      <div class='val-md' style='color:#5aab78;margin-top:4px'>{ar["co2_kt"]} kt</div>
-      <div class='muted'>per year</div>
+      <div class='val-md' style='margin-top:4px'>{ar["co2_kt"]} kt</div>
+      <div style='font-size:10px;color:#2c2f48;margin-top:1px'>per year</div>
     </div>
   </div>
 </div>
-<div class='muted' style='margin-top:8px;font-size:10px'>
+<div style='font-size:9px;color:#2c2f48;margin-top:8px'>
   20% rooftop coverage · 60% usable · click map to exit
 </div>
 """), unsafe_allow_html=True)
@@ -806,29 +804,28 @@ def main():
 </div>
 """, unsafe_allow_html=True)
 
-        with st.sidebar:
-            n_panels = st.slider(" ", min_value=1, max_value=100, value=10,
-                                  format="%d panels", key="n_panels",
-                                  label_visibility="collapsed")
+        n_panels = st.slider(" ", min_value=1, max_value=100, value=10,
+                              format="%d panels", key="n_panels",
+                              label_visibility="collapsed")
         r = calc(ghi, n_panels)
 
         st.markdown(_sec(f"""
-<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px'>
+<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px'>
   <div>
     <span class='val-lg' style='color:#f0a040'>{r["peak_kw"]}</span>
-    <span class='muted' style='margin-left:4px'>kWp system</span>
+    <span style='font-size:10px;color:#2c2f48;margin-left:4px'>kWp</span>
   </div>
   <div style='text-align:right'>
-    <span class='val-md' style='color:#eef0f8'>{r["kwh_yr"]:,}</span>
-    <span class='muted' style='margin-left:3px'>kWh/yr</span>
+    <span class='val-md' style='color:#d4d8e8'>{r["kwh_yr"]:,}</span>
+    <span style='font-size:10px;color:#2c2f48;margin-left:3px'>kWh / yr</span>
   </div>
 </div>
-{_row("Installed cost", f"${r['cost']:,}")}
-{_row("Payback period", f"{r['payback']} yrs", "#5aab78")}
-{_row("CO₂ offset", f"{r['co2_trees']:,} trees/yr", "#5aab78")}
+{_row("Cost", f"${r['cost']:,}")}
+{_row("Payback", f"{r['payback']} yrs", "#d4d8e8")}
+{_row("CO₂ offset", f"{r['co2_trees']:,} trees / yr")}
 <div class='divider'></div>
-{_power_row("🏠", f"{r['homes']}x", "avg homes powered")}
-{_power_row("📱", f"{r['phones']:,}/day", "phones charged")}
+{_row("Homes powered", f"{r['homes']}×")}
+{_row("Phones charged", f"{r['phones']:,} / day")}
 """), unsafe_allow_html=True)
 
         # ── world rank chart ──────────────────────────────────────────────────
@@ -840,16 +837,59 @@ def main():
         st.sidebar.plotly_chart(chart_rank(ghi, name), use_container_width=True,
                                  config={"displayModeBar": False}, key="rank_chart")
 
+        # ── map hints + building legend (P3: live in sidebar, not below map) ──
+        if show_bldgs and buildings:
+            st.markdown(f"""
+<div class='section' style='padding-top:10px;padding-bottom:10px'>
+  <div class='label' style='margin-bottom:8px'>ROOFTOP SOLAR / YEAR</div>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:5px 12px'>
+    <div style='display:flex;align-items:center;gap:6px'>
+      <span style='width:8px;height:8px;border-radius:1px;background:#4888c8;display:inline-block;flex-shrink:0'></span>
+      <span style='font-size:9.5px;color:#404468'>&lt; 2k kWh</span>
+    </div>
+    <div style='display:flex;align-items:center;gap:6px'>
+      <span style='width:8px;height:8px;border-radius:1px;background:#5aab78;display:inline-block;flex-shrink:0'></span>
+      <span style='font-size:9.5px;color:#404468'>2–5k kWh</span>
+    </div>
+    <div style='display:flex;align-items:center;gap:6px'>
+      <span style='width:8px;height:8px;border-radius:1px;background:#c8b044;display:inline-block;flex-shrink:0'></span>
+      <span style='font-size:9.5px;color:#404468'>5–10k kWh</span>
+    </div>
+    <div style='display:flex;align-items:center;gap:6px'>
+      <span style='width:8px;height:8px;border-radius:1px;background:#d4824a;display:inline-block;flex-shrink:0'></span>
+      <span style='font-size:9.5px;color:#404468'>10–20k kWh</span>
+    </div>
+    <div style='display:flex;align-items:center;gap:6px'>
+      <span style='width:8px;height:8px;border-radius:1px;background:#f0a040;display:inline-block;flex-shrink:0'></span>
+      <span style='font-size:9.5px;color:#404468'>&gt; 20k kWh</span>
+    </div>
+    <div style='display:flex;align-items:center;gap:6px'>
+      <span style='font-size:9.5px;color:#2c2f48'>{len(buildings)} buildings</span>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+        else:
+            st.markdown("""
+<div class='section' style='padding-top:8px;padding-bottom:8px'>
+  <div style='font-size:9px;color:#2c2f48;line-height:1.7'>
+    Click map to analyse any point<br>
+    Draw rectangle for area potential<br>
+    Zoom &ge; 14 for rooftop data
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
         # ── attribution ───────────────────────────────────────────────────────
         st.markdown(f"""
-<div class='section-last' style='padding-top:12px'>
+<div class='section-last' style='padding-top:10px'>
   <div class='label'>DATA SOURCES</div>
-  <div class='muted' style='margin-top:4px;line-height:1.6'>
-    {solar.get("source","PVGIS EU JRC")} · OpenStreetMap · Nominatim
-    <br>5-year average 2019–2023
+  <div style='font-size:10px;color:#2c2f48;margin-top:4px;line-height:1.7'>
+    {solar.get("source","PVGIS EU JRC")}<br>
+    OpenStreetMap · Nominatim · 2019–2023
   </div>
-  <div class='label' style='margin-top:12px'>DAY 03 NEXT →</div>
-  <div class='muted' style='margin-top:4px;line-height:1.6'>
+  <div class='label' style='margin-top:12px'>DAY 03</div>
+  <div style='font-size:10px;color:#2c2f48;margin-top:3px;line-height:1.6'>
     Water Stress Index — where freshwater is running out
     and which grids fail when rivers stop flowing.
   </div>
@@ -863,56 +903,36 @@ def main():
                   buildings=buildings if show_bldgs else None,
                   area_coords=st.session_state.area_coords)
 
+    # P3: map fills the viewport — no content below it
     map_data = st_folium(m,
         returned_objects=["last_clicked", "last_active_drawing", "bounds", "zoom"],
         key="solar_map",
-        height=750,
+        height=820,
         use_container_width=True)
-
-    # Hint overlay (rendered below map in DOM but styled to look overlaid)
-    if show_bldgs and buildings:
-        hint = f"🏗  {len(buildings)} buildings · coloured by rooftop solar"
-    else:
-        hint = "Click anywhere to analyse · Draw a rectangle for area potential · Zoom ≥ 14 for rooftop data"
-    st.markdown(f"""
-<div style='text-align:center;padding:6px 0 0;position:relative'>
-  <span style='display:inline-block;background:rgba(13,14,21,0.7);
-    border:1px solid rgba(255,255,255,0.055);border-radius:5px;
-    padding:5px 16px;font-size:10.5px;color:#3e4260;letter-spacing:.04em'>
-    {hint}
-  </span>
-</div>
-""", unsafe_allow_html=True)
-
-    # Building colour legend
-    if show_bldgs and buildings:
-        st.markdown("""
-<div style='display:flex;gap:14px;justify-content:center;padding:8px 0 0;flex-wrap:wrap'>
-  <span style='color:#3e4260;font-size:9px;letter-spacing:.1em;
-    text-transform:uppercase;font-weight:600;align-self:center'>Rooftop kWh/yr</span>
-  <span style='display:flex;align-items:center;gap:5px'>
-    <span style='width:10px;height:10px;border-radius:2px;background:#4888c8;display:inline-block'></span>
-    <span style='font-size:10px;color:#3e4260'>&lt;2k</span></span>
-  <span style='display:flex;align-items:center;gap:5px'>
-    <span style='width:10px;height:10px;border-radius:2px;background:#5aab78;display:inline-block'></span>
-    <span style='font-size:10px;color:#3e4260'>2–5k</span></span>
-  <span style='display:flex;align-items:center;gap:5px'>
-    <span style='width:10px;height:10px;border-radius:2px;background:#c8b044;display:inline-block'></span>
-    <span style='font-size:10px;color:#3e4260'>5–10k</span></span>
-  <span style='display:flex;align-items:center;gap:5px'>
-    <span style='width:10px;height:10px;border-radius:2px;background:#d4824a;display:inline-block'></span>
-    <span style='font-size:10px;color:#3e4260'>10–20k</span></span>
-  <span style='display:flex;align-items:center;gap:5px'>
-    <span style='width:10px;height:10px;border-radius:2px;background:#f0a040;display:inline-block'></span>
-    <span style='font-size:10px;color:#3e4260'>&gt;20k kWh</span></span>
-</div>
-""", unsafe_allow_html=True)
 
     # ── handle map events ──────────────────────────────────────────────────────
     if map_data:
         new_zoom = map_data.get("zoom")
-        if new_zoom and new_zoom != st.session_state.map_zoom:
+        zoom_changed = new_zoom and new_zoom != st.session_state.map_zoom
+        if zoom_changed:
             st.session_state.map_zoom = new_zoom
+
+        # Store viewport bounds for accurate building fetch next rerun
+        raw_bounds = map_data.get("bounds")
+        if raw_bounds:
+            st.session_state.viewport_bounds = {
+                "south": raw_bounds["_southWest"]["lat"],
+                "west":  raw_bounds["_southWest"]["lng"],
+                "north": raw_bounds["_northEast"]["lat"],
+                "east":  raw_bounds["_northEast"]["lng"],
+            }
+
+        # Zoom crosses 14 threshold → rerun so buildings appear immediately
+        prev_zoom = zoom  # zoom was captured before map_data
+        if zoom_changed and (
+            (prev_zoom < 14 <= new_zoom) or (new_zoom < 14 <= prev_zoom)
+        ):
+            st.rerun()
 
         drawing = map_data.get("last_active_drawing")
         if drawing and drawing.get("geometry", {}).get("type") == "Polygon":
