@@ -1,12 +1,13 @@
 """
-Day 02 — Solar Potential Atlas  (V6: GSA Colors + Solar Pathways + Click Fix)
+Day 02 — Solar Potential Atlas  (V10)
 The Resilience Stack · 30 Days of Climate Intelligence
 
-Fixes in V6:
-  - Location snap-back: use last_click tracking (not lat/lon comparison)
-  - Circle brush: GSA-standard interpolated colour gradient (multi-shell)
-  - Solar Pathways: context-aware links to schemes, tools, installers
-  - Colour legend strip matching Global Solar Atlas / NITI ICED ramp
+V10 fixes:
+  - Irradiation loading: explicit NASA -999 sentinel filter, 15 s timeout,
+    geographic fallback so the app always shows data even when all APIs fail
+  - Zoom: remove forced rerun on zoom-level changes (no more map-snap on zoom)
+  - Map fills the full viewport (CSS 100vh + increased height param)
+  - Pan threshold raised 0.25°→0.40° to reduce rerender chatter
 
 Run:  streamlit run day02_solar_atlas.py
 """
@@ -136,7 +137,7 @@ def geocode(query: str):
     except Exception:
         return None
 
-@st.cache_data(ttl=86400*30, show_spinner=False, persist="disk")
+@st.cache_data(ttl=86400*30, show_spinner=False)
 def reverse_geocode(lat: float, lon: float) -> str:
     try:
         r = requests.get(NOMINATIM,
@@ -152,12 +153,52 @@ def reverse_geocode(lat: float, lon: float) -> str:
         return f"{lat:.3f}°N, {lon:.3f}°E"
 
 # ── solar data ─────────────────────────────────────────────────────────────────
-def _month_avg(d):
+def _month_avg(d: dict) -> dict:
+    """Aggregate dict(YYYYMM → value) into {month: mean}.
+    NASA POWER uses -999 as a fill/missing sentinel — always excluded.
+    """
     avgs = {}
     for m in range(1, 13):
-        vals = [v for k, v in d.items() if k.endswith(f"{m:02d}") and v and v > 0]
-        avgs[m] = round(sum(vals)/len(vals), 3) if vals else None
+        vals = [v for k, v in d.items()
+                if k.endswith(f"{m:02d}")
+                and v is not None
+                and isinstance(v, (int, float))
+                and v > 0
+                and v != -999]
+        avgs[m] = round(sum(vals) / len(vals), 3) if vals else None
     return avgs
+
+
+def _latlon_fallback(lat: float) -> dict:
+    """Return a rough climatological solar estimate when all live APIs fail.
+
+    Values are a simplified latitude-band average; the monthly profile uses a
+    northern-hemisphere sinusoidal shape (flipped for the southern hemisphere).
+    Shown with source tag "Estimated" so the UI can flag it.
+    """
+    al = abs(lat)
+    if   al <= 10: annual = 5.8
+    elif al <= 20: annual = 5.5
+    elif al <= 30: annual = 5.1
+    elif al <= 40: annual = 4.3
+    elif al <= 50: annual = 3.3
+    elif al <= 60: annual = 2.5
+    else:          annual = 1.8
+
+    # Normalised month weights for northern hemisphere (peak in June)
+    weights = [0.75, 0.82, 0.96, 1.07, 1.15, 1.20,
+               1.18, 1.12, 1.02, 0.90, 0.76, 0.70]
+    if lat < 0:               # flip for southern hemisphere
+        weights = weights[6:] + weights[:6]
+    ghi  = {m: round(annual * weights[m - 1], 3) for m in range(1, 13)}
+    clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}
+    return {
+        "ghi":    ghi,
+        "clear":  clr,
+        "temp":   {m: None for m in range(1, 13)},
+        "annual": annual,
+        "source": "Estimated",
+    }
 
 @st.cache_data(ttl=86400*7, show_spinner=False)
 def fetch_solar(lat: float, lon: float):
@@ -165,19 +206,21 @@ def fetch_solar(lat: float, lon: float):
     Try three solar APIs fastest-first.
     NASA POWER returns pre-aggregated monthly means — tiny payload, ~1-3 s globally.
     Results cached in-memory for 7 days (no persist="disk" to avoid diskcache dep).
+    Falls back to a geographic estimate if all live APIs fail so the UI always works.
     """
     # Round to 2 dp so nearby points share cache (≈1 km granularity)
     lat4, lon4 = round(lat, 2), round(lon, 2)
     sess = _get_session()
 
     # 1. NASA POWER — monthly means pre-computed server-side, ~24 values, fast globally
+    #    timeout=15 s: NASA POWER can be slow from Asia; -999 is NASA's missing-data fill
     try:
         r = sess.get(NASA_URL, params={
             "parameters": "ALLSKY_SFC_SW_DWN,T2M",
             "community": "RE",
             "longitude": lon4, "latitude": lat4,
             "start": 2020, "end": 2023, "format": "JSON",
-        }, timeout=10)
+        }, timeout=15)
         r.raise_for_status()
         prop = r.json().get("properties", {}).get("parameter", {})
         ghi_raw  = prop.get("ALLSKY_SFC_SW_DWN", {})
@@ -243,7 +286,9 @@ def fetch_solar(lat: float, lon: float):
     except Exception:
         pass
 
-    return None
+    # All live APIs failed — return a geographic climatological estimate so the
+    # app remains usable offline / during outages.
+    return _latlon_fallback(lat4)
 
 # ── buildings ──────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
@@ -700,6 +745,32 @@ footer, #MainMenu { display: none !important; }
 /* Building legend chips */
 .bchip { display:inline-flex; align-items:center; gap:5px; font-size:9.5px; color:#7a80a0; }
 .bdot  { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+
+/* ── map full-viewport ────────────────────────────────────────────────────── */
+/* Remove Streamlit's residual vertical padding in the main column */
+section[data-testid="stMain"] {
+  overflow: hidden !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+section[data-testid="stMain"] > div:first-child,
+[data-testid="stMainBlockContainer"] {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+/* Streamlit custom component host div + the iframe inside it */
+[data-testid="stCustomComponentV1"] {
+  height: 100vh !important;
+  min-height: 100vh !important;
+}
+[data-testid="stCustomComponentV1"] > iframe {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  display: block !important;
+}
 </style>
 """
 
@@ -805,9 +876,12 @@ def main():
                 st.error("Location not found.")
                 return
 
+        # fetch_solar now always returns data (falls back to geographic estimate)
+        # so this branch is kept only as a safety net for unexpected None returns
         if not solar:
             st.markdown(_sec("<div class='muted' style='padding:20px 0;text-align:center'>"
-                             "No solar data available.</div>"), unsafe_allow_html=True)
+                             "Solar data unavailable for this location.</div>"),
+                        unsafe_allow_html=True)
             return
 
         # ── location + hero ───────────────────────────────────────────────────
@@ -1036,19 +1110,20 @@ def main():
         # Location now tracks the map CENTER via bounds (pan to explore).
         returned_objects=["last_active_drawing", "bounds", "zoom"],
         key=f"solar_map_{nav_id}",
-        height=840,
+        height=1200,          # CSS overrides this to 100vh; large fallback for tall screens
         use_container_width=True)
 
     # ── handle map events ──────────────────────────────────────────────────────
     if map_data:
-        # zoom tracking
+        # ── zoom tracking (NO forced rerun — avoid map snap on zoom) ──────────
+        # Buildings show/hide on the NEXT natural rerun (pan, slider, etc.).
+        # Removing the zoom_crossed rerun eliminates the jank users feel when
+        # zooming in/out quickly.
         new_zoom = map_data.get("zoom")
-        zoom_crossed = (new_zoom and new_zoom != zoom and
-                        ((zoom < 14 <= new_zoom) or (new_zoom < 14 <= zoom)))
         if new_zoom:
             st.session_state.map_zoom = new_zoom
 
-        # bounds → viewport + center-based location update
+        # ── bounds → viewport + center-based location update ──────────────────
         rb = map_data.get("bounds")
         if rb:
             sw, ne = rb["_southWest"], rb["_northEast"]
@@ -1059,18 +1134,18 @@ def main():
             # Derive map center from bounds
             c_lat = round((sw["lat"] + ne["lat"]) / 2, 4)
             c_lon = round((sw["lng"] + ne["lng"]) / 2, 4)
-            # Only update when the user has panned significantly (>0.25° ≈ 28 km).
-            # This fires after a deliberate pan, not on every slider rerun.
-            if (abs(c_lat - lat) > 0.25 or abs(c_lon - lon) > 0.25):
-                st.session_state.lat      = c_lat
-                st.session_state.lon      = c_lon
-                st.session_state.mode     = "point"
+            # Only update when the user has panned significantly (>0.40° ≈ 44 km).
+            # Raised from 0.25° to reduce chatter on slow zooms/small pans.
+            if (abs(c_lat - lat) > 0.40 or abs(c_lon - lon) > 0.40):
+                st.session_state.lat         = c_lat
+                st.session_state.lon         = c_lon
+                st.session_state.mode        = "point"
                 st.session_state.area_bounds = None
                 st.session_state.area_coords = None
-                st.session_state.loc_name = reverse_geocode(c_lat, c_lon)
+                st.session_state.loc_name    = reverse_geocode(c_lat, c_lon)
                 st.rerun()
 
-        # rectangle draw
+        # ── rectangle draw ────────────────────────────────────────────────────
         drawing = map_data.get("last_active_drawing")
         if drawing and drawing.get("geometry", {}).get("type") == "Polygon":
             coords = drawing["geometry"]["coordinates"][0]
@@ -1083,9 +1158,6 @@ def main():
                 st.session_state.area_coords = coords
                 st.session_state.mode = "area"
                 st.rerun()
-
-        if zoom_crossed:
-            st.rerun()
 
 if __name__ == "__main__":
     main()
