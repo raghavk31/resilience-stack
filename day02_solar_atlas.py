@@ -1,12 +1,12 @@
 """
-Day 02 — Solar Potential Atlas  (V5: Light Glass + Circle Brush)
+Day 02 — Solar Potential Atlas  (V6: GSA Colors + Solar Pathways + Click Fix)
 The Resilience Stack · 30 Days of Climate Intelligence
 
-Design: Morphocode-reference light glass morphism
-        — warm-sky gradient background
-        — frosted white panel (backdrop-filter blur)
-        — moveable circle brush coloured by solar tier
-        — zero chrome below the map
+Fixes in V6:
+  - Location snap-back: use last_click tracking (not lat/lon comparison)
+  - Circle brush: GSA-standard interpolated colour gradient (multi-shell)
+  - Solar Pathways: context-aware links to schemes, tools, installers
+  - Colour legend strip matching Global Solar Atlas / NITI ICED ramp
 
 Run:  streamlit run day02_solar_atlas.py
 """
@@ -47,34 +47,63 @@ BENCHMARKS = {
     "Tokyo":       4.0, "Berlin":    3.1, "London":   2.8,
 }
 
-# (min_ghi, label, colour for LIGHT bg, hex)
+# ── GSA-standard colour scale ──────────────────────────────────────────────────
+# Matches Global Solar Atlas / NITI ICED solar irradiance palette
+# deep-indigo → blue → sky → teal → lime → yellow → amber → red-orange → dark-red
+_GSA_STOPS = [
+    (0.0,  (26,   0, 110)),
+    (1.5,  ( 0,  51, 187)),
+    (2.5,  ( 0, 136, 204)),
+    (3.5,  ( 0, 187, 136)),
+    (4.0,  (100, 204,   0)),
+    (4.5,  (200, 220,   0)),
+    (5.0,  (255, 204,   0)),
+    (5.5,  (255, 136,   0)),
+    (6.0,  (255,  51,   0)),
+    (6.5,  (220,  20,   0)),
+    (7.5,  (170,   0,   0)),
+]
+
+# CSS gradient string for legend strip (mirrors _GSA_STOPS)
+GSA_LEGEND_CSS = ("linear-gradient(to right,"
+    "#1a006e,#0033bb,#0088cc,#00bb88,#64cc00,"
+    "#c8dc00,#ffcc00,#ff8800,#ff3300,#dc1400,#aa0000)")
+
+def _lerp(a: int, b: int, t: float) -> int:
+    return int(a + (b - a) * t)
+
+def gsa_color(ghi: float) -> str:
+    """Return hex colour interpolated on the GSA irradiance ramp."""
+    stops = _GSA_STOPS
+    if ghi <= stops[0][0]:
+        r, g, b = stops[0][1]
+        return f"#{r:02x}{g:02x}{b:02x}"
+    if ghi >= stops[-1][0]:
+        r, g, b = stops[-1][1]
+        return f"#{r:02x}{g:02x}{b:02x}"
+    for i in range(len(stops) - 1):
+        lo_v, (lr, lg, lb) = stops[i]
+        hi_v, (hr, hg, hb) = stops[i + 1]
+        if lo_v <= ghi < hi_v:
+            t = (ghi - lo_v) / (hi_v - lo_v)
+            return f"#{_lerp(lr,hr,t):02x}{_lerp(lg,hg,t):02x}{_lerp(lb,hb,t):02x}"
+    r, g, b = stops[-1][1]
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+# Text classification (labels only — colour always from gsa_color)
 SOLAR_BANDS = [
-    (6.5, "WORLD-CLASS", "#c45d00"),
-    (5.5, "EXCELLENT",   "#d97018"),
-    (4.5, "GOOD",        "#c49a10"),
-    (3.5, "MODERATE",    "#1a8a50"),
-    (0.0, "LOW",         "#2060b8"),
+    (6.5, "WORLD-CLASS"),
+    (5.5, "EXCELLENT"),
+    (4.5, "GOOD"),
+    (3.5, "MODERATE"),
+    (0.0, "LOW"),
 ]
 
-def solar_class(ghi):
-    for t, lbl, col in SOLAR_BANDS:
+def solar_class(ghi: float) -> str:
+    for t, lbl in SOLAR_BANDS:
         if ghi >= t:
-            return lbl, col
-    return "LOW", "#2060b8"
-
-# Fill colour for circle brush (translucent, on light map)
-BAND_FILL = [
-    (6.5, "#ff8800"),
-    (5.5, "#ff9933"),
-    (4.5, "#f0b820"),
-    (3.5, "#38c070"),
-    (0.0, "#3c88e8"),
-]
-def solar_fill(ghi):
-    for t, col in BAND_FILL:
-        if ghi >= t:
-            return col
-    return "#3c88e8"
+            return lbl
+    return "LOW"
 
 # ── network ────────────────────────────────────────────────────────────────────
 HEADERS = {"User-Agent": "ResilienceStack/1.0"}
@@ -96,7 +125,8 @@ def geocode(query: str):
             timeout=10)
         r.raise_for_status()
         res = r.json().get("results", [])
-        if not res: return None
+        if not res:
+            return None
         loc = res[0]
         return {"lat": loc["latitude"], "lon": loc["longitude"],
                 "name": loc.get("name", query),
@@ -124,8 +154,8 @@ def reverse_geocode(lat: float, lon: float) -> str:
 def _month_avg(d):
     avgs = {}
     for m in range(1, 13):
-        vals = [v for k,v in d.items() if k.endswith(f"{m:02d}") and v and v>0]
-        avgs[m] = round(sum(vals)/len(vals),3) if vals else None
+        vals = [v for k, v in d.items() if k.endswith(f"{m:02d}") and v and v > 0]
+        avgs[m] = round(sum(vals)/len(vals), 3) if vals else None
     return avgs
 
 @st.cache_data(ttl=86400*30, show_spinner=False)
@@ -142,17 +172,19 @@ def fetch_solar(lat: float, lon: float):
         if rows:
             sums: dict = defaultdict(list)
             for row in rows:
-                m,yr,hm = int(row["month"]),int(row["year"]),row.get("H(h)_m")
-                if hm and hm>0: sums[m].append(hm/monthrange(yr,m)[1])
-            ghi  = {m: round(sum(vs)/len(vs),3) for m,vs in sums.items() if vs}
-            clr  = {m: round(v*1.18,3) for m,v in ghi.items()}
-            temp = {m: None for m in range(1,13)}
-            valid = [v for v in ghi.values() if v and v>0]
+                m, yr, hm = int(row["month"]), int(row["year"]), row.get("H(h)_m")
+                if hm and hm > 0:
+                    sums[m].append(hm / monthrange(yr, m)[1])
+            ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in sums.items() if vs}
+            clr  = {m: round(v*1.18, 3) for m, v in ghi.items()}
+            temp = {m: None for m in range(1, 13)}
+            valid = [v for v in ghi.values() if v and v > 0]
             if len(valid) >= 10:
                 return {"ghi": ghi, "clear": clr, "temp": temp,
-                        "annual": round(sum(valid)/len(valid),3),
+                        "annual": round(sum(valid)/len(valid), 3),
                         "source": "PVGIS · EU JRC"}
-    except Exception: pass
+    except Exception:
+        pass
     # 2. NASA POWER
     try:
         r = sess.get(NASA_URL, params={
@@ -166,10 +198,11 @@ def fetch_solar(lat: float, lon: float):
         temp = _month_avg(data["T2M"])
         valid = [v for v in ghi.values() if v]
         if valid:
-            return {"ghi":ghi,"clear":clr,"temp":temp,
-                    "annual":round(sum(valid)/len(valid),3),
-                    "source":"NASA POWER"}
-    except Exception: pass
+            return {"ghi": ghi, "clear": clr, "temp": temp,
+                    "annual": round(sum(valid)/len(valid), 3),
+                    "source": "NASA POWER"}
+    except Exception:
+        pass
     # 3. Open-Meteo
     try:
         r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
@@ -177,19 +210,21 @@ def fetch_solar(lat: float, lon: float):
             "start_date":"2019-01-01","end_date":"2023-12-31",
             "daily":"shortwave_radiation_sum","timezone":"UTC"}, timeout=30)
         r.raise_for_status()
-        daily = r.json().get("daily",{})
+        daily = r.json().get("daily", {})
         ms: dict = defaultdict(list)
-        for d,v in zip(daily.get("time",[]),daily.get("shortwave_radiation_sum",[])):
-            if v is not None and v>=0: ms[int(d[5:7])].append(v/3.6)
-        ghi  = {m: round(sum(vs)/len(vs),3) for m,vs in ms.items() if vs}
-        clr  = {m: round(v*1.15,3) for m,v in ghi.items()}
-        temp = {m: None for m in range(1,13)}
+        for d, v in zip(daily.get("time",[]), daily.get("shortwave_radiation_sum",[])):
+            if v is not None and v >= 0:
+                ms[int(d[5:7])].append(v / 3.6)
+        ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in ms.items() if vs}
+        clr  = {m: round(v*1.15, 3) for m, v in ghi.items()}
+        temp = {m: None for m in range(1, 13)}
         valid = list(ghi.values())
         if valid:
-            return {"ghi":ghi,"clear":clr,"temp":temp,
-                    "annual":round(sum(valid)/len(valid),3),
-                    "source":"Open-Meteo ERA5"}
-    except Exception: pass
+            return {"ghi": ghi, "clear": clr, "temp": temp,
+                    "annual": round(sum(valid)/len(valid), 3),
+                    "source": "Open-Meteo ERA5"}
+    except Exception:
+        pass
     return None
 
 # ── buildings ──────────────────────────────────────────────────────────────────
@@ -202,120 +237,193 @@ def get_buildings(south, west, north, east):
         r = _get_session().post(OVERPASS_URL, data={"data": query}, timeout=30)
         r.raise_for_status()
         out = []
-        for el in r.json().get("elements",[]):
-            if el.get("type")=="way" and el.get("geometry"):
-                coords = [(n["lat"],n["lon"]) for n in el["geometry"]]
+        for el in r.json().get("elements", []):
+            if el.get("type") == "way" and el.get("geometry"):
+                coords = [(n["lat"], n["lon"]) for n in el["geometry"]]
                 if len(coords) >= 3:
                     area = _poly_area(coords)
-                    if area > 10: out.append({"coords":coords,"area_m2":round(area,1)})
+                    if area > 10:
+                        out.append({"coords": coords, "area_m2": round(area, 1)})
         return out
-    except Exception: return []
+    except Exception:
+        return []
 
 def _poly_area(coords):
-    if len(coords)<3: return 0.0
+    if len(coords) < 3:
+        return 0.0
     lat_m = 111_320.0
     lon_m = 111_320.0 * math.cos(math.radians(coords[0][0]))
     n, area = len(coords), 0.0
     for i in range(n):
-        x1,y1 = coords[i][1]*lon_m,       coords[i][0]*lat_m
-        x2,y2 = coords[(i+1)%n][1]*lon_m, coords[(i+1)%n][0]*lat_m
-        area  += x1*y2 - x2*y1
-    return abs(area)/2.0
+        x1, y1 = coords[i][1]*lon_m,        coords[i][0]*lat_m
+        x2, y2 = coords[(i+1)%n][1]*lon_m,  coords[(i+1)%n][0]*lat_m
+        area += x1*y2 - x2*y1
+    return abs(area) / 2.0
 
 def bldg_kwh(area, ghi):
-    return area*0.6*ghi*EFFICIENCY*PERF_RATIO*365
+    return area * 0.6 * ghi * EFFICIENCY * PERF_RATIO * 365
 
 def bldg_col(kwh):
-    if kwh>=20_000: return "#e87820"
-    if kwh>=10_000: return "#d4a020"
-    if kwh>= 5_000: return "#a0c020"
-    if kwh>= 2_000: return "#20b060"
+    if kwh >= 20_000: return "#e87820"
+    if kwh >= 10_000: return "#d4a020"
+    if kwh >=  5_000: return "#a0c020"
+    if kwh >=  2_000: return "#20b060"
     return "#2080d0"
 
-# ── solar area calc ─────────────────────────────────────────────────────────────
+# ── area calc ──────────────────────────────────────────────────────────────────
 def calc_area(bounds, ghi):
-    s,n,w,e = bounds["south"],bounds["north"],bounds["west"],bounds["east"]
-    lat_m = 111_320.0
-    lon_m = 111_320.0*math.cos(math.radians((s+n)/2))
-    area_m2 = abs(e-w)*lon_m*abs(n-s)*lat_m
-    roof    = area_m2*0.20*0.60
-    kwh_yr  = roof*ghi*EFFICIENCY*PERF_RATIO*365
+    s, n, w, e = bounds["south"], bounds["north"], bounds["west"], bounds["east"]
+    lat_m   = 111_320.0
+    lon_m   = 111_320.0 * math.cos(math.radians((s+n)/2))
+    area_m2 = abs(e-w)*lon_m * abs(n-s)*lat_m
+    roof    = area_m2 * 0.20 * 0.60
+    kwh_yr  = roof * ghi * EFFICIENCY * PERF_RATIO * 365
     return {
-        "area_km2":round(area_m2/1_000_000,3),
-        "roof_m2": round(roof),
-        "mwh_yr":  round(kwh_yr/1000),
-        "homes":   round(kwh_yr/3500),
-        "panels":  int(roof/PANEL_M2),
-        "co2_kt":  round(kwh_yr*CO2_G_KWH/1_000_000,1),
+        "area_km2": round(area_m2/1_000_000, 3),
+        "roof_m2":  round(roof),
+        "mwh_yr":   round(kwh_yr/1000),
+        "homes":    round(kwh_yr/3500),
+        "panels":   int(roof/PANEL_M2),
+        "co2_kt":   round(kwh_yr*CO2_G_KWH/1_000_000, 1),
     }
 
-# ── calculator ─────────────────────────────────────────────────────────────────
+# ── panel calculator ───────────────────────────────────────────────────────────
 def calc(ghi, n):
-    kwh_yr = ghi*n*PANEL_M2*EFFICIENCY*PERF_RATIO*365
-    peak   = n*PANEL_W/1000
-    cost   = peak*1000*COST_USD_W
+    kwh_yr = ghi * n * PANEL_M2 * EFFICIENCY * PERF_RATIO * 365
+    peak   = n * PANEL_W / 1000
+    cost   = peak * 1000 * COST_USD_W
     return {
         "kwh_yr":  round(kwh_yr),
-        "peak_kw": round(peak,1),
-        "homes":   round(kwh_yr/3500,1),
+        "peak_kw": round(peak, 1),
+        "homes":   round(kwh_yr/3500, 1),
         "phones":  int(kwh_yr/365*1000/12),
         "trees":   round(kwh_yr*CO2_G_KWH/1000/21),
         "cost":    round(cost),
-        "payback": round(cost/(kwh_yr*0.12),1) if kwh_yr>0 else None,
+        "payback": round(cost/(kwh_yr*0.12), 1) if kwh_yr > 0 else None,
     }
 
+# ── solar pathways (context-aware) ────────────────────────────────────────────
+def solar_pathways(ghi: float, lat: float, lon: float):
+    """Return 3-4 relevant service links based on location + irradiance tier."""
+    is_india = (8 <= lat <= 37 and 68 <= lon <= 97)
+    pvgis_url = f"https://re.jrc.ec.europa.eu/pvg_tools/en/?lat={lat:.4f}&lon={lon:.4f}"
+    tier = solar_class(ghi)
+    items = []
+
+    if is_india:
+        items.append({
+            "cat": "GOVT SCHEME",
+            "icon": "🏛",
+            "title": "PM Surya Ghar Muft Bijli Yojana",
+            "desc": "Up to ₹78,000 subsidy + 300 units/month free electricity",
+            "url": "https://pmsuryaghar.gov.in",
+            "cta": "Check eligibility →",
+        })
+        if ghi >= 4.5:
+            items.append({
+                "cat": "INSTALLER",
+                "icon": "⚡",
+                "title": "Get Rooftop Quotes",
+                "desc": f"At {ghi:.1f} kWh/m²/day your system pays back in ~6–8 yrs",
+                "url": "https://www.tatapowersolar.com/solar-rooftop/",
+                "cta": "Compare quotes →",
+            })
+        items.append({
+            "cat": "AGRI SOLAR",
+            "icon": "🌾",
+            "title": "PM-KUSUM Scheme",
+            "desc": "Solar pumps & farm solarisation — 30% central subsidy",
+            "url": "https://mnre.gov.in/pm-kusum/",
+            "cta": "Explore scheme →",
+        })
+        items.append({
+            "cat": "SIMULATION",
+            "icon": "📐",
+            "title": "PVGIS Detailed Simulation",
+            "desc": "Monthly yield, losses, tilt optimisation for this exact location",
+            "url": pvgis_url,
+            "cta": "Open tool ↗",
+        })
+    else:
+        items.append({
+            "cat": "SIMULATION",
+            "icon": "📐",
+            "title": "PVGIS Radiation Report",
+            "desc": "EU JRC monthly radiation + PV yield for this location",
+            "url": pvgis_url,
+            "cta": "Open tool ↗",
+        })
+        items.append({
+            "cat": "ROOFTOP AI",
+            "icon": "🛰",
+            "title": "Google Project Sunroof",
+            "desc": "Aerial imagery to estimate your roof's solar potential",
+            "url": "https://sunroof.withgoogle.com/",
+            "cta": "Try Sunroof →",
+        })
+        if ghi >= 5.0:
+            items.append({
+                "cat": "COMMERCIAL",
+                "icon": "🏭",
+                "title": "Global Solar Atlas",
+                "desc": f"World-class {ghi:.1f} kWh/m²/day — ideal for utility-scale",
+                "url": f"https://globalsolaratlas.info/map?c={lat:.4f},{lon:.4f},10",
+                "cta": "View atlas →",
+            })
+        if ghi < 3.5:
+            items.append({
+                "cat": "ALTERNATIVE",
+                "icon": "🌐",
+                "title": "Community Solar",
+                "desc": "Subscribe to off-site solar — no rooftop needed",
+                "url": "https://www.energy.gov/eere/solar/community-solar",
+                "cta": "Learn more →",
+            })
+        items.append({
+            "cat": "FINANCIAL",
+            "icon": "📊",
+            "title": "PVWatts Calculator",
+            "desc": "NREL tool: detailed financial model with local electricity rates",
+            "url": f"https://pvwatts.nrel.gov/pvwatts.php?lat={lat:.4f}&lon={lon:.4f}",
+            "cta": "Model savings →",
+        })
+
+    return items[:4]
+
 # ── map builder ────────────────────────────────────────────────────────────────
-def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None):
-    fill   = solar_fill(ghi)
-    _, col = solar_class(ghi)
-
-    m = folium.Map(
-        location=[lat, lon], zoom_start=zoom,
-        tiles="CartoDB positron",   # light basemap matches light panel
-        prefer_canvas=True,
-    )
-
-    # Rectangle draw only
-    Draw(export=False, draw_options={
-        "rectangle": {"shapeOptions":{"color":"#e87820","weight":2,"fillOpacity":0.05}},
-        "polygon":False,"polyline":False,"circle":False,
-        "marker":False,"circlemarker":False},
-        edit_options={"edit":False,"remove":True}).add_to(m)
-    LocateControl(auto_start=False).add_to(m)
-
-    # ── circle brush (the Morphocode-inspired moveable lens) ──────────────────
-    # Outer glow ring
-    folium.Circle(
-        location=[lat, lon], radius=radius_m*1.08,
-        color=fill, weight=0,
-        fill=True, fill_color=fill, fill_opacity=0.04,
-    ).add_to(m)
-    # Main brush circle — translucent fill + coloured ring
+def _draw_brush(m, lat: float, lon: float, radius_m: int, ghi: float):
+    """GSA-gradient circle brush: 6 concentric shells simulate radial fade."""
+    c = gsa_color(ghi)
+    # Shells from outside→in, opacity increases toward centre
+    for frac, alpha in [(1.00, 0.04), (0.78, 0.08), (0.56, 0.13),
+                        (0.36, 0.20), (0.18, 0.30), (0.06, 0.50)]:
+        folium.Circle(
+            location=[lat, lon], radius=int(radius_m * frac),
+            color="none", weight=0,
+            fill=True, fill_color=c, fill_opacity=alpha,
+        ).add_to(m)
+    # Crisp outer ring
     folium.Circle(
         location=[lat, lon], radius=radius_m,
-        color=fill, weight=2,
-        fill=True, fill_color=fill, fill_opacity=0.12,
+        color=c, weight=1.5, opacity=0.5,
+        fill=False,
         tooltip=(f"<b style='font-family:Inter'>{ghi:.2f} kWh/m²/day</b><br>"
                  f"<span style='font-size:10px;color:#666'>"
                  f"Radius {radius_m/1000:.1f} km · click anywhere to move</span>"),
     ).add_to(m)
-    # Pulsing centre dot with inline CSS animation
+    # Pulsing centre dot
     folium.Marker(
         location=[lat, lon],
         icon=folium.DivIcon(
             html=f"""
             <div style="position:relative;width:20px;height:20px">
-              <div style="
-                position:absolute;inset:0;border-radius:50%;
-                background:{fill};opacity:0.25;
-                animation:ring 2s ease-out infinite;
-              "></div>
-              <div style="
-                position:absolute;inset:3px;border-radius:50%;
-                background:{fill};
-                border:2px solid rgba(255,255,255,0.9);
-                box-shadow:0 2px 8px {fill}88;
-              "></div>
+              <div style="position:absolute;inset:0;border-radius:50%;
+                background:{c};opacity:0.25;animation:ring 2s ease-out infinite;">
+              </div>
+              <div style="position:absolute;inset:3px;border-radius:50%;
+                background:{c};border:2px solid rgba(255,255,255,0.9);
+                box-shadow:0 2px 8px {c}88;">
+              </div>
             </div>
             <style>
               @keyframes ring{{
@@ -324,12 +432,26 @@ def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None):
                 100%{{transform:scale(2.2);opacity:0}}
               }}
             </style>""",
-            icon_size=(20,20), icon_anchor=(10,10),
+            icon_size=(20, 20), icon_anchor=(10, 10),
         ),
         tooltip=f"☀ {ghi:.2f} kWh/m²/day",
     ).add_to(m)
 
-    # Buildings
+def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None):
+    m = folium.Map(
+        location=[lat, lon], zoom_start=zoom,
+        tiles="CartoDB positron",
+        prefer_canvas=True,
+    )
+    Draw(export=False, draw_options={
+        "rectangle": {"shapeOptions":{"color":"#e87820","weight":2,"fillOpacity":0.05}},
+        "polygon":False,"polyline":False,"circle":False,
+        "marker":False,"circlemarker":False},
+        edit_options={"edit":False,"remove":True}).add_to(m)
+    LocateControl(auto_start=False).add_to(m)
+
+    _draw_brush(m, lat, lon, radius_m, ghi)
+
     if buildings:
         for b in buildings[:400]:
             kwh = bldg_kwh(b["area_m2"], ghi)
@@ -338,9 +460,8 @@ def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None):
                 fill=True, fill_color=c, fill_opacity=0.55,
                 tooltip=f"{int(kwh):,} kWh/yr · {int(b['area_m2'])}m²").add_to(m)
 
-    # Drawn rectangle
     if area_coords:
-        folium.Polygon([(c[1],c[0]) for c in area_coords],
+        folium.Polygon([(c[1], c[0]) for c in area_coords],
             color="#e87820", weight=2, dash_array="8 5",
             fill=True, fill_color="#e87820", fill_opacity=0.07).add_to(m)
 
@@ -351,23 +472,20 @@ CHART_BG = "rgba(0,0,0,0)"
 ACCENT   = "#e87820"
 
 def chart_monthly(solar, ghi) -> go.Figure:
-    vals = [solar["ghi"].get(m) or 0 for m in range(1,13)]
+    vals = [solar["ghi"].get(m) or 0 for m in range(1, 13)]
     peak = max(range(12), key=lambda i: vals[i])
     cols = [f"rgba(232,120,32,{0.85 if i==peak else 0.25})" for i in range(12)]
-
     fig = go.Figure(go.Bar(
         x=MONTHS_3, y=vals, marker_color=cols,
         hovertemplate="<b>%{x}</b>  %{y:.2f} kWh/m²/day<extra></extra>",
     ))
-    # Average line
-    avg = ghi
-    fig.add_shape(type="line", x0=-0.5, x1=11.5, y0=avg, y1=avg,
+    fig.add_shape(type="line", x0=-0.5, x1=11.5, y0=ghi, y1=ghi,
                   line=dict(color="rgba(232,120,32,0.4)", width=1.5, dash="dot"))
     fig.update_layout(
-        height=120, margin=dict(l=0,r=0,t=0,b=0), showlegend=False,
+        height=110, margin=dict(l=0,r=0,t=0,b=0), showlegend=False,
         paper_bgcolor=CHART_BG, plot_bgcolor=CHART_BG,
         xaxis=dict(showgrid=False, showticklabels=True,
-                   tickfont=dict(color="#9aa0b8",size=8),
+                   tickfont=dict(color="#9aa0b8", size=8),
                    tickmode="array", tickvals=MONTHS_3),
         yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
         bargap=0.2,
@@ -378,10 +496,10 @@ def chart_rank(my_ghi, my_name) -> go.Figure:
     data  = dict(BENCHMARKS)
     short = my_name.split(",")[0].strip()
     data[short] = my_ghi
-    df = pd.DataFrame({"city":list(data.keys()),"ghi":list(data.values())})
+    df = pd.DataFrame({"city": list(data.keys()), "ghi": list(data.values())})
     df = df.sort_values("ghi", ascending=True)
-    cols   = [ACCENT if c==short else "rgba(30,34,64,0.12)" for c in df["city"]]
-    labels = [f"{c} ◀" if c==short else c for c in df["city"]]
+    cols   = [ACCENT if c == short else "rgba(30,34,64,0.12)" for c in df["city"]]
+    labels = [f"{c} ◀" if c == short else c for c in df["city"]]
     fig = go.Figure(go.Bar(
         x=df["ghi"], y=labels, orientation="h",
         marker_color=cols,
@@ -389,20 +507,18 @@ def chart_rank(my_ghi, my_name) -> go.Figure:
     ))
     fig.update_layout(
         height=max(260, len(df)*19),
-        margin=dict(l=0,r=4,t=0,b=0),
+        margin=dict(l=0, r=4, t=0, b=0),
         paper_bgcolor=CHART_BG, plot_bgcolor=CHART_BG,
         xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-        yaxis=dict(showgrid=False,
-                   tickfont=dict(color="#4a5070",size=9)),
+        yaxis=dict(showgrid=False, tickfont=dict(color="#4a5070", size=9)),
     )
     return fig
 
-# ══ CSS — light glass morphism ═════════════════════════════════════════════════
+# ══ CSS ════════════════════════════════════════════════════════════════════════
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ── base: warm-sky gradient that bleeds through glass ─────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
@@ -414,7 +530,7 @@ html, body {
   font-family: 'Inter', system-ui, sans-serif !important;
 }
 
-/* ── hide all Streamlit chrome ──────────────────────────────────────────── */
+/* ── hide Streamlit chrome ────────────────────────────────────────────────── */
 [data-testid="stHeader"],
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
@@ -422,14 +538,14 @@ html, body {
 footer, #MainMenu { display: none !important; }
 [data-testid="stSidebarCollapseButton"] { display: none !important; }
 
-/* ── main block: zero padding ───────────────────────────────────────────── */
+/* ── main block: zero padding ─────────────────────────────────────────────── */
 .main .block-container,
 [data-testid="block-container"] {
   padding: 0 !important;
   max-width: 100% !important;
 }
 
-/* ── sidebar: frosted glass panel ───────────────────────────────────────── */
+/* ── sidebar: frosted glass panel ─────────────────────────────────────────── */
 [data-testid="stSidebar"] {
   background: rgba(255,255,255,0.72) !important;
   backdrop-filter: blur(28px) saturate(1.6) !important;
@@ -455,7 +571,7 @@ footer, #MainMenu { display: none !important; }
 [data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
   background: rgba(0,20,80,0.10); border-radius: 2px; }
 
-/* ── sidebar form elements ──────────────────────────────────────────────── */
+/* ── form elements ────────────────────────────────────────────────────────── */
 [data-testid="stSidebar"] [data-testid="stTextInput"] label { display:none !important; }
 [data-testid="stSidebar"] [data-testid="stTextInput"] > div > div > input {
   background: rgba(255,255,255,0.6) !important;
@@ -489,111 +605,83 @@ footer, #MainMenu { display: none !important; }
   background: rgba(232,120,32,0.18) !important;
   border-color: rgba(232,120,32,0.55) !important;
 }
-/* slider thumb */
 [data-testid="stSidebar"] [data-baseweb="slider"] [role="slider"] {
-  background: #e87820 !important;
-  border-color: #e87820 !important;
-}
+  background: #e87820 !important; border-color: #e87820 !important; }
 [data-testid="stSidebar"] [data-testid="stSlider"] label {
-  color: #4a5070 !important;
-  font-size: 11px !important;
-  font-weight: 500 !important;
-}
+  color: #4a5070 !important; font-size: 11px !important; font-weight: 500 !important; }
 
-/* ── design tokens ──────────────────────────────────────────────────────── */
-.sec {
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(0,20,80,0.06);
-}
-.sec-last { padding: 14px 20px 24px; }
+/* ── design tokens ────────────────────────────────────────────────────────── */
+.sec      { padding: 14px 20px; border-bottom: 1px solid rgba(0,20,80,0.06); }
+.sec-last { padding: 14px 20px 28px; }
 
 .lbl {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: #9aa0b8;
-  margin-bottom: 2px;
+  font-size: 9px; font-weight: 600; letter-spacing: .15em;
+  text-transform: uppercase; color: #9aa0b8; margin-bottom: 2px;
 }
 .lbl-md {
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: .13em;
-  text-transform: uppercase;
-  color: #8890a8;
-  margin-bottom: 8px;
+  font-size: 9.5px; font-weight: 600; letter-spacing: .13em;
+  text-transform: uppercase; color: #8890a8; margin-bottom: 8px;
 }
 
-/* Hero: dark navy, always — colour lives only in the tier badge */
 .hero {
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: -.03em;
-  line-height: 1;
-  color: #1e2240;
-  font-variant-numeric: tabular-nums;
+  font-size: 40px; font-weight: 700; letter-spacing: -.03em;
+  line-height: 1; color: #1e2240; font-variant-numeric: tabular-nums;
 }
-.hero-unit {
-  font-size: 11px;
-  color: #9aa0b8;
-  letter-spacing: .07em;
-  margin-top: 4px;
-}
-.val-lg {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -.01em;
-  color: #1e2240;
-}
-.val-md {
-  font-size: 13px;
-  font-weight: 600;
-  color: #2a304a;
-}
-.muted { color: #7a80a0; font-size: 11px; }
+.hero-unit { font-size: 11px; color: #9aa0b8; letter-spacing: .07em; margin-top: 4px; }
+.val-lg    { font-size: 18px; font-weight: 600; letter-spacing: -.01em; color: #1e2240; }
+.val-md    { font-size: 13px; font-weight: 600; color: #2a304a; }
+.muted     { color: #7a80a0; font-size: 11px; }
 .accent-txt { color: #c45d00; }
 .pos-txt    { color: #1a7a48; }
-.div {
-  height: 1px;
-  background: rgba(0,20,80,0.06);
-  margin: 10px 0;
-}
+.div { height: 1px; background: rgba(0,20,80,0.06); margin: 10px 0; }
 
-/* Stat row: no separator lines */
 .srow {
-  display:flex; justify-content:space-between; align-items:center;
-  padding: 5px 0;
+  display:flex; justify-content:space-between; align-items:center; padding: 5px 0;
 }
-
-/* Tier badge: text only, coloured */
 .badge { font-size:8.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 
-/* Area analysis left-border card */
-.area-card {
-  border-left: 2px solid rgba(232,120,32,0.45);
-  padding: 8px 0 8px 12px;
-  margin-top: 6px;
-}
-
-/* Glass inset for the hero block */
 .hero-block {
   background: rgba(255,255,255,0.45);
-  border-radius: 10px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
+  border-radius: 10px; padding: 16px 18px; margin-bottom: 12px;
   border: 1px solid rgba(255,255,255,0.85);
-  box-shadow: 0 2px 12px rgba(0,20,80,0.06),
-              inset 0 1px 0 rgba(255,255,255,0.6);
+  box-shadow: 0 2px 12px rgba(0,20,80,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+.area-card {
+  border-left: 2px solid rgba(232,120,32,0.45);
+  padding: 8px 0 8px 12px; margin-top: 6px;
+}
+
+/* Pathway cards */
+.pathway-card {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(0,20,80,0.07);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: box-shadow .2s, background .2s;
+}
+.pathway-card:hover {
+  background: rgba(255,255,255,0.75);
+  box-shadow: 0 2px 14px rgba(0,20,80,0.08);
+}
+.pathway-cat {
+  font-size: 7.5px; font-weight: 700; letter-spacing: .18em;
+  text-transform: uppercase; color: #b0b8d0; margin-bottom: 3px;
+}
+.pathway-title {
+  font-size: 12px; font-weight: 600; color: #1e2240; margin-bottom: 2px;
+}
+.pathway-desc { font-size: 10.5px; color: #7a80a0; line-height: 1.4; }
+.pathway-cta {
+  font-size: 10px; font-weight: 600; color: #c45d00;
+  letter-spacing: .04em; margin-top: 5px; display: block;
+  text-decoration: none;
 }
 
 /* Building legend chips */
-.bchip {
-  display:inline-flex; align-items:center; gap:5px;
-  font-size:9.5px; color:#7a80a0;
-}
-.bdot {
-  width:8px; height:8px; border-radius:2px; flex-shrink:0;
-}
+.bchip { display:inline-flex; align-items:center; gap:5px; font-size:9.5px; color:#7a80a0; }
+.bdot  { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
 </style>
 """
 
@@ -615,8 +703,12 @@ def _init():
         map_zoom=12, mode="point",
         area_bounds=None, area_coords=None,
         viewport_bounds=None,
+        # KEY: tracks the coordinates of the last click we actually processed.
+        # Comparing new clicks against this (not against lat/lon) prevents the
+        # snap-back bug where stale last_clicked fires after a search rerun.
+        last_click=None,
     )
-    for k,v in defs.items():
+    for k, v in defs.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
@@ -627,15 +719,15 @@ def main():
     st.markdown(CSS, unsafe_allow_html=True)
     _init()
 
-    lat   = st.session_state.lat
-    lon   = st.session_state.lon
-    zoom  = st.session_state.map_zoom
-    name  = st.session_state.loc_name
+    lat  = st.session_state.lat
+    lon  = st.session_state.lon
+    zoom = st.session_state.map_zoom
+    name = st.session_state.loc_name
 
     solar = fetch_solar(lat, lon)
     ghi   = solar["annual"] if solar else 0.0
-    lbl, col = solar_class(ghi)
-    fill      = solar_fill(ghi)
+    lbl   = solar_class(ghi)
+    col   = gsa_color(ghi)
 
     # Buildings (viewport-aware)
     buildings  = []
@@ -643,13 +735,13 @@ def main():
     if show_bldgs and solar:
         vp = st.session_state.viewport_bounds
         if vp:
-            buildings = get_buildings(vp["south"],vp["west"],vp["north"],vp["east"])
+            buildings = get_buildings(vp["south"], vp["west"], vp["north"], vp["east"])
         else:
             d = max(0.003, 0.035/(2**(zoom-14)))
             buildings = get_buildings(lat-d, lon-d, lat+d, lon+d)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # SIDEBAR (glass panel)
+    # SIDEBAR
     # ══════════════════════════════════════════════════════════════════════════
     with st.sidebar:
 
@@ -684,11 +776,13 @@ def main():
                 st.session_state.lon      = loc["lon"]
                 st.session_state.loc_name = (
                     f"{loc['name']}{', '+loc['admin'] if loc['admin'] else ''}, {loc['country']}")
-                st.session_state.map_zoom    = 12
-                st.session_state.mode        = "point"
-                st.session_state.area_bounds = None
-                st.session_state.area_coords = None
+                st.session_state.map_zoom       = 12
+                st.session_state.mode           = "point"
+                st.session_state.area_bounds    = None
+                st.session_state.area_coords    = None
                 st.session_state.viewport_bounds = None
+                # Do NOT reset last_click here — we want old stale clicks to remain
+                # "already processed" so they don't fire on the next render.
                 st.rerun()
             else:
                 st.error("Location not found.")
@@ -703,7 +797,7 @@ def main():
         short  = name.split(",")[0].strip()
         rest   = ", ".join(name.split(",")[1:]).strip()
         tvs    = [v for v in solar["temp"].values() if v is not None]
-        t_avg  = round(sum(tvs)/len(tvs),1) if tvs else None
+        t_avg  = round(sum(tvs)/len(tvs), 1) if tvs else None
         best_m = max(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
         low_m  = min(solar["ghi"], key=lambda m: solar["ghi"].get(m) or 0)
 
@@ -727,6 +821,17 @@ def main():
     <span style='font-size:10px;color:#9aa0b8;font-style:italic'>
       {solar.get("source","PVGIS")} · 2019–2023
     </span>
+  </div>
+  <!-- GSA colour legend strip -->
+  <div style='margin-top:10px'>
+    <div style='height:5px;border-radius:3px;
+      background:{GSA_LEGEND_CSS};'></div>
+    <div style='display:flex;justify-content:space-between;margin-top:3px'>
+      <span style='font-size:7.5px;color:#b0b8d0'>0</span>
+      <span style='font-size:7.5px;color:#b0b8d0'>2.5</span>
+      <span style='font-size:7.5px;color:#b0b8d0'>5.0</span>
+      <span style='font-size:7.5px;color:#b0b8d0'>7.5 kWh/m²/day</span>
+    </div>
   </div>
 </div>
 
@@ -775,7 +880,7 @@ def main():
 </div>
 """, unsafe_allow_html=True)
         st.plotly_chart(chart_monthly(solar, ghi), use_container_width=True,
-                        config={"displayModeBar":False}, key="m_chart")
+                        config={"displayModeBar": False}, key="m_chart")
 
         # ── area analysis ─────────────────────────────────────────────────────
         if st.session_state.mode == "area" and st.session_state.area_bounds:
@@ -818,15 +923,14 @@ def main():
 </div>
 """), unsafe_allow_html=True)
 
-        # ── calculator ────────────────────────────────────────────────────────
+        # ── panel calculator ──────────────────────────────────────────────────
         st.markdown("""
 <div class='sec' style='padding-bottom:4px'>
   <div class='lbl-md'>PANEL CALCULATOR</div>
 </div>
 """, unsafe_allow_html=True)
-        n_panels = st.slider(" ", 1, 100, 10,
-                             format="%d panels", key="n_panels",
-                             label_visibility="collapsed")
+        n_panels = st.slider(" ", 1, 100, 10, format="%d panels",
+                             key="n_panels", label_visibility="collapsed")
         r = calc(ghi, n_panels)
         st.markdown(_sec(f"""
 <div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px'>
@@ -847,6 +951,23 @@ def main():
 {_row("Phones / day",     f"{r['phones']:,}")}
 """), unsafe_allow_html=True)
 
+        # ── solar pathways ────────────────────────────────────────────────────
+        pathways = solar_pathways(ghi, lat, lon)
+        cards_html = "".join(f"""
+<a href='{p["url"]}' target='_blank' style='text-decoration:none'>
+  <div class='pathway-card'>
+    <div class='pathway-cat'>{p["cat"]}</div>
+    <div class='pathway-title'>{p["icon"]} {p["title"]}</div>
+    <div class='pathway-desc'>{p["desc"]}</div>
+    <span class='pathway-cta'>{p["cta"]}</span>
+  </div>
+</a>
+""" for p in pathways)
+        st.markdown(_sec(f"""
+<div class='lbl-md'>SOLAR PATHWAYS</div>
+{cards_html}
+"""), unsafe_allow_html=True)
+
         # ── global rank ───────────────────────────────────────────────────────
         st.markdown("""
 <div class='sec' style='padding-bottom:6px'>
@@ -854,9 +975,9 @@ def main():
 </div>
 """, unsafe_allow_html=True)
         st.plotly_chart(chart_rank(ghi, name), use_container_width=True,
-                        config={"displayModeBar":False}, key="rank_chart")
+                        config={"displayModeBar": False}, key="rank_chart")
 
-        # ── footer / hints ────────────────────────────────────────────────────
+        # ── building legend ───────────────────────────────────────────────────
         if show_bldgs and buildings:
             st.markdown(f"""
 <div class='sec' style='padding-top:10px;padding-bottom:10px'>
@@ -874,11 +995,11 @@ def main():
 
         st.markdown(f"""
 <div class='sec-last'>
-  <div style='font-size:9px;color:#9aa0b8;line-height:1.8'>
-    Click the map to move the brush<br>
-    Draw a rectangle for area analysis<br>
-    Zoom ≥ 14 for building footprints<br>
-    <span style='color:#bcc4d0'>PVGIS · OSM · 2019–2023</span>
+  <div style='font-size:9px;color:#9aa0b8;line-height:1.9'>
+    Click anywhere on the map to move the brush<br>
+    Draw a rectangle for area solar analysis<br>
+    Zoom ≥ 14 to see building-level potential<br>
+    <span style='color:#bcc4d0'>PVGIS · NASA POWER · OSM · 2019–2023</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -900,13 +1021,13 @@ def main():
     # ── handle map events ──────────────────────────────────────────────────────
     if map_data:
         # zoom tracking
-        new_zoom = map_data.get("zoom")
+        new_zoom    = map_data.get("zoom")
         zoom_crossed = (new_zoom and new_zoom != zoom and
                         ((zoom < 14 <= new_zoom) or (new_zoom < 14 <= zoom)))
         if new_zoom:
             st.session_state.map_zoom = new_zoom
 
-        # viewport bounds (for accurate building fetch)
+        # viewport bounds
         rb = map_data.get("bounds")
         if rb:
             st.session_state.viewport_bounds = {
@@ -928,16 +1049,25 @@ def main():
                 st.session_state.mode = "area"
                 st.rerun()
 
-        # map click → move brush
-        # FIX: compare against current session lat/lon (not a separate prev_click var)
-        # This prevents the "reset to Mumbai" bug caused by stale last_clicked in st_folium.
+        # ── click → move brush ─────────────────────────────────────────────
+        # FIX (V6): Compare incoming click against last_click (the coordinates
+        # we last processed), NOT against the current session lat/lon.
+        # When a search fires a rerun, lat/lon changes but last_click stays at
+        # the old position — so the stale st_folium last_clicked matches
+        # last_click and is correctly ignored.
         click = map_data.get("last_clicked")
         if click:
             new_lat = round(click["lat"], 5)
             new_lon = round(click["lng"], 5)
-            moved   = (abs(new_lat - st.session_state.lat) > 0.0001 or
-                       abs(new_lon - st.session_state.lon) > 0.0001)
-            if moved:
+            lc = st.session_state.last_click
+            is_new_click = (
+                lc is None or
+                abs(new_lat - lc["lat"]) > 0.00005 or
+                abs(new_lon - lc["lng"]) > 0.00005
+            )
+            if is_new_click:
+                # Store FIRST — prevents double-processing on rapid reruns
+                st.session_state.last_click  = {"lat": new_lat, "lng": new_lon}
                 st.session_state.lat         = new_lat
                 st.session_state.lon         = new_lon
                 st.session_state.mode        = "point"
