@@ -12,7 +12,7 @@ V10 fixes:
 Run:  streamlit run day02_solar_atlas.py
 """
 
-import math, requests, urllib3
+import math, time, queue, threading, requests, urllib3
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -200,33 +200,19 @@ def _latlon_fallback(lat: float) -> dict:
         "source": "Estimated",
     }
 
-@st.cache_data(ttl=86400*7, show_spinner=False)
-def fetch_solar(lat: float, lon: float):
-    """
-    Try three solar APIs fastest-first.
-    NASA POWER returns pre-aggregated monthly means — tiny payload, ~1-3 s globally.
-    Results cached in-memory for 7 days (no persist="disk" to avoid diskcache dep).
-    Falls back to a geographic estimate if all live APIs fail so the UI always works.
-    """
-    # Round to 2 dp so nearby points share cache (≈1 km granularity)
-    lat4, lon4 = round(lat, 2), round(lon, 2)
-    sess = _get_session()
-
-    # 1. NASA POWER — monthly means pre-computed server-side, ~24 values, fast globally
-    #    timeout=15 s: NASA POWER can be slow from Asia; -999 is NASA's missing-data fill
+# ── per-API worker functions (called from threads, no shared session) ──────────
+def _try_nasa(lat4: float, lon4: float):
     try:
-        r = sess.get(NASA_URL, params={
+        r = requests.get(NASA_URL, params={
             "parameters": "ALLSKY_SFC_SW_DWN,T2M",
             "community": "RE",
             "longitude": lon4, "latitude": lat4,
             "start": 2020, "end": 2023, "format": "JSON",
-        }, timeout=15)
+        }, headers=HEADERS, timeout=9)
         r.raise_for_status()
         prop = r.json().get("properties", {}).get("parameter", {})
-        ghi_raw  = prop.get("ALLSKY_SFC_SW_DWN", {})
-        temp_raw = prop.get("T2M", {})
-        ghi  = _month_avg(ghi_raw)
-        temp = _month_avg(temp_raw)
+        ghi  = _month_avg(prop.get("ALLSKY_SFC_SW_DWN", {}))
+        temp = _month_avg(prop.get("T2M", {}))
         clr  = {m: round(v * 1.18, 3) for m, v in ghi.items() if v}
         valid = [v for v in ghi.values() if v and v > 0]
         if len(valid) >= 10:
@@ -235,14 +221,16 @@ def fetch_solar(lat: float, lon: float):
                     "source": "NASA POWER"}
     except Exception:
         pass
+    return None
 
-    # 2. PVGIS EU JRC — accurate but EU server (~5-15 s from Asia)
+
+def _try_pvgis(lat4: float, lon4: float):
     try:
-        r = sess.get(PVGIS_URL, params={
+        r = requests.get(PVGIS_URL, params={
             "lat": lat4, "lon": lon4,
             "startyear": 2020, "endyear": 2023,
             "horirrad": 1, "outputformat": "json", "browser": 0,
-        }, timeout=10)
+        }, headers=HEADERS, timeout=9)
         r.raise_for_status()
         rows = r.json().get("outputs", {}).get("monthly", [])
         if rows:
@@ -251,7 +239,7 @@ def fetch_solar(lat: float, lon: float):
                 m, yr, hm = int(row["month"]), int(row["year"]), row.get("H(h)_m")
                 if hm and hm > 0:
                     sums[m].append(hm / monthrange(yr, m)[1])
-            ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in sums.items() if vs}
+            ghi  = {m: round(sum(vs) / len(vs), 3) for m, vs in sums.items() if vs}
             clr  = {m: round(v * 1.18, 3) for m, v in ghi.items()}
             temp = {m: None for m in range(1, 13)}
             valid = [v for v in ghi.values() if v and v > 0]
@@ -261,21 +249,23 @@ def fetch_solar(lat: float, lon: float):
                         "source": "PVGIS · EU JRC"}
     except Exception:
         pass
+    return None
 
-    # 3. Open-Meteo ERA5 — daily data needs client aggregation, larger payload
+
+def _try_openmeteo(lat4: float, lon4: float):
     try:
-        r = sess.get("https://archive-api.open-meteo.com/v1/archive", params={
+        r = requests.get("https://archive-api.open-meteo.com/v1/archive", params={
             "latitude": lat4, "longitude": lon4,
             "start_date": "2021-01-01", "end_date": "2023-12-31",
             "daily": "shortwave_radiation_sum", "timezone": "UTC",
-        }, timeout=10)
+        }, headers=HEADERS, timeout=10)
         r.raise_for_status()
         daily = r.json().get("daily", {})
         ms: dict = defaultdict(list)
         for d, v in zip(daily.get("time", []), daily.get("shortwave_radiation_sum", [])):
             if v is not None and v >= 0:
                 ms[int(d[5:7])].append(v / 3.6)
-        ghi  = {m: round(sum(vs)/len(vs), 3) for m, vs in ms.items() if vs}
+        ghi  = {m: round(sum(vs) / len(vs), 3) for m, vs in ms.items() if vs}
         clr  = {m: round(v * 1.15, 3) for m, v in ghi.items()}
         temp = {m: None for m in range(1, 13)}
         valid = list(ghi.values())
@@ -285,9 +275,47 @@ def fetch_solar(lat: float, lon: float):
                     "source": "Open-Meteo ERA5"}
     except Exception:
         pass
+    return None
 
-    # All live APIs failed — return a geographic climatological estimate so the
-    # app remains usable offline / during outages.
+
+@st.cache_data(ttl=86400*7, show_spinner=False)
+def fetch_solar(lat: float, lon: float):
+    """
+    Fire all three solar APIs simultaneously in daemon threads.
+    Return the first valid response — typical wall time 1-4 s instead of 15-35 s.
+    Falls back to a geographic climatological estimate if all APIs fail.
+    """
+    lat4, lon4 = round(lat, 2), round(lon, 2)
+    result_q: queue.Queue = queue.Queue()
+
+    def _run(fn):
+        try:
+            result_q.put(fn(lat4, lon4))
+        except Exception:
+            result_q.put(None)
+
+    workers = [
+        threading.Thread(target=_run, args=(_try_nasa,),      daemon=True),
+        threading.Thread(target=_run, args=(_try_pvgis,),     daemon=True),
+        threading.Thread(target=_run, args=(_try_openmeteo,), daemon=True),
+    ]
+    for w in workers:
+        w.start()
+
+    # Collect results as they arrive; return on first non-None, wait max 14 s
+    deadline = time.monotonic() + 14
+    for _ in range(len(workers)):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            result = result_q.get(timeout=remaining)
+            if result is not None:
+                return result
+        except queue.Empty:
+            break
+
+    # All live APIs failed or timed out — geographic estimate, always works
     return _latlon_fallback(lat4)
 
 # ── buildings ──────────────────────────────────────────────────────────────────
@@ -897,8 +925,7 @@ def main():
   <div style='font-size:15px;font-weight:600;color:#1e2240;letter-spacing:-.01em'>{short}</div>
   <div class='muted' style='margin-top:1px'>{rest}</div>
   <div style='font-size:9px;color:#9aa0b8;margin-top:1px;letter-spacing:.04em'>
-    {lat:.4f}°N &nbsp; {lon:.4f}°E &nbsp;
-    <span style='color:#c0c8dc'>nav#{st.session_state.nav_id}</span>
+    {lat:.4f}°N &nbsp; {lon:.4f}°E
   </div>
 </div>
 
