@@ -1,5 +1,5 @@
 """
-Day 02 — Solar Potential Atlas  (V10)
+Day 02 — Solar Potential Atlas  (V12)
 The Resilience Stack · 30 Days of Climate Intelligence
 
 V10 fixes:
@@ -318,11 +318,39 @@ def fetch_solar(lat: float, lon: float):
     # All live APIs failed or timed out — geographic estimate, always works
     return _latlon_fallback(lat4)
 
+
+@st.cache_data(ttl=86400*7, show_spinner=False)
+def fetch_pvgis_system(lat: float, lon: float):
+    """PVGIS PVcalc: optimal tilt, azimuth, annual yield per kWp installed."""
+    try:
+        r = requests.get("https://re.jrc.ec.europa.eu/api/v5_3/PVcalc", params={
+            "lat": round(lat, 2), "lon": round(lon, 2),
+            "peakpower": 1, "loss": 14,
+            "outputformat": "json", "browser": 0,
+        }, headers=HEADERS, timeout=12)
+        r.raise_for_status()
+        d   = r.json()
+        tot = d.get("outputs", {}).get("totals", {}).get("fixed", {})
+        mnt = d.get("inputs",  {}).get("mounting_system", {}).get("fixed", {})
+        return {
+            "e_yr_kwp": round(tot.get("E_y",    0)),
+            "h_yr":     round(tot.get("H(i)_y", 0), 1),
+            "tilt":     mnt.get("slope",   {}).get("value"),
+            "azimuth":  mnt.get("azimuth", {}).get("value"),
+        }
+    except Exception:
+        return None
+
 # ── buildings ──────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def get_buildings(south, west, north, east):
+    # Include both ways and multipolygon relations so large/complex buildings aren't missed
+    bb = f"{south:.5f},{west:.5f},{north:.5f},{east:.5f}"
     query = (f"[out:json][timeout:25];\n"
-             f"(way[\"building\"]({south:.5f},{west:.5f},{north:.5f},{east:.5f}););\n"
+             f"(\n"
+             f"  way[\"building\"]({bb});\n"
+             f"  relation[\"building\"]({bb});\n"
+             f");\n"
              f"out geom;")
     try:
         r = _get_session().post(OVERPASS_URL, data={"data": query}, timeout=30)
@@ -335,6 +363,15 @@ def get_buildings(south, west, north, east):
                     area = _poly_area(coords)
                     if area > 10:
                         out.append({"coords": coords, "area_m2": round(area, 1)})
+            elif el.get("type") == "relation":
+                for member in el.get("members", []):
+                    if member.get("role") == "outer" and member.get("geometry"):
+                        coords = [(n["lat"], n["lon"]) for n in member["geometry"]]
+                        if len(coords) >= 3:
+                            area = _poly_area(coords)
+                            if area > 10:
+                                out.append({"coords": coords, "area_m2": round(area, 1)})
+                        break  # first outer ring per relation is the footprint
         return out
     except Exception:
         return []
@@ -360,6 +397,17 @@ def bldg_col(kwh):
     if kwh >=  5_000: return "#a0c020"
     if kwh >=  2_000: return "#20b060"
     return "#2080d0"
+
+def _point_in_poly(lat: float, lon: float, coords: list) -> bool:
+    """Ray casting point-in-polygon. coords = [(lat, lon), ...]"""
+    n, inside, j = len(coords), False, len(coords) - 1
+    for i in range(n):
+        xi, yi = coords[i][1], coords[i][0]
+        xj, yj = coords[j][1], coords[j][0]
+        if ((yi > lat) != (yj > lat)) and (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
 
 # ── area calc ──────────────────────────────────────────────────────────────────
 def calc_area(bounds, ghi):
@@ -483,37 +531,53 @@ def solar_pathways(ghi: float, lat: float, lon: float):
 
 # ── map builder ────────────────────────────────────────────────────────────────
 def _draw_brush(m, lat: float, lon: float, radius_m: int, ghi: float):
-    """GSA-gradient circle brush: 6 concentric shells simulate radial fade."""
-    c = gsa_color(ghi)
-    # Shells from outside→in, opacity increases toward centre
-    for frac, alpha in [(1.00, 0.04), (0.78, 0.08), (0.56, 0.13),
-                        (0.36, 0.20), (0.18, 0.30), (0.06, 0.50)]:
+    """Multi-color GSA gradient brush.
+
+    Each concentric band uses the GSA colour for a progressively lower GHI
+    (from actual GHI at the centre to ~40 % of GHI at the outer edge), so
+    the disc looks like a radial solar-atlas heatmap.
+    """
+    # (radius_fraction, ghi_multiplier, fill_opacity)
+    bands = [
+        (1.00, 0.40, 0.07),
+        (0.80, 0.56, 0.12),
+        (0.62, 0.70, 0.18),
+        (0.44, 0.82, 0.25),
+        (0.28, 0.92, 0.33),
+        (0.14, 1.00, 0.45),
+    ]
+    for frac, mult, alpha in bands:
+        c = gsa_color(ghi * mult)
         folium.Circle(
             location=[lat, lon], radius=int(radius_m * frac),
             color="none", weight=0,
             fill=True, fill_color=c, fill_opacity=alpha,
         ).add_to(m)
-    # Crisp outer ring
+
+    # Outer ring in actual GHI colour
+    c_ring = gsa_color(ghi)
     folium.Circle(
         location=[lat, lon], radius=radius_m,
-        color=c, weight=1.5, opacity=0.5,
+        color=c_ring, weight=1.5, opacity=0.55,
         fill=False,
         tooltip=(f"<b style='font-family:Inter'>{ghi:.2f} kWh/m²/day</b><br>"
                  f"<span style='font-size:10px;color:#666'>"
-                 f"Radius {radius_m/1000:.1f} km · click anywhere to move</span>"),
+                 f"Radius {radius_m/1000:.1f} km · click map to move</span>"),
     ).add_to(m)
+
     # Pulsing centre dot
+    c_dot = gsa_color(ghi)
     folium.Marker(
         location=[lat, lon],
         icon=folium.DivIcon(
             html=f"""
             <div style="position:relative;width:20px;height:20px">
               <div style="position:absolute;inset:0;border-radius:50%;
-                background:{c};opacity:0.25;animation:ring 2s ease-out infinite;">
+                background:{c_dot};opacity:0.25;animation:ring 2s ease-out infinite;">
               </div>
               <div style="position:absolute;inset:3px;border-radius:50%;
-                background:{c};border:2px solid rgba(255,255,255,0.9);
-                box-shadow:0 2px 8px {c}88;">
+                background:{c_dot};border:2px solid rgba(255,255,255,0.9);
+                box-shadow:0 2px 8px {c_dot}88;">
               </div>
             </div>
             <style>
@@ -528,12 +592,24 @@ def _draw_brush(m, lat: float, lon: float, radius_m: int, ghi: float):
         tooltip=f"☀ {ghi:.2f} kWh/m²/day",
     ).add_to(m)
 
-def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None):
-    m = folium.Map(
-        location=[lat, lon], zoom_start=zoom,
-        tiles="CartoDB positron",
-        prefer_canvas=True,
-    )
+def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None, selected_bldg=None, satellite=False):
+    if satellite:
+        m = folium.Map(
+            location=[lat, lon], zoom_start=zoom,
+            tiles=("https://server.arcgisonline.com/ArcGIS/rest/services/"
+                   "World_Imagery/MapServer/tile/{z}/{y}/{x}"),
+            attr="Esri WorldImagery", prefer_canvas=True,
+        )
+        # Street name overlay on satellite
+        folium.TileLayer(
+            tiles="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+            attr="CartoDB", overlay=True, name="Labels", opacity=0.75,
+        ).add_to(m)
+    else:
+        m = folium.Map(
+            location=[lat, lon], zoom_start=zoom,
+            tiles="CartoDB positron", prefer_canvas=True,
+        )
     Draw(export=False, draw_options={
         "rectangle": {"shapeOptions":{"color":"#e87820","weight":2,"fillOpacity":0.05}},
         "polygon":False,"polyline":False,"circle":False,
@@ -543,13 +619,22 @@ def build_map(lat, lon, zoom, ghi, radius_m, buildings=None, area_coords=None):
 
     _draw_brush(m, lat, lon, radius_m, ghi)
 
+    # Fingerprint selected building by its first coord for O(1) match
+    sel_fp = (selected_bldg["coords"][0] if selected_bldg and selected_bldg.get("coords") else None)
+
     if buildings:
         for b in buildings[:400]:
-            kwh = bldg_kwh(b["area_m2"], ghi)
-            c   = bldg_col(kwh)
-            folium.Polygon(b["coords"], color=c, weight=0.8,
-                fill=True, fill_color=c, fill_opacity=0.55,
-                tooltip=f"{int(kwh):,} kWh/yr · {int(b['area_m2'])}m²").add_to(m)
+            kwh   = bldg_kwh(b["area_m2"], ghi)
+            c     = bldg_col(kwh)
+            is_sel = sel_fp and len(b["coords"]) > 0 and b["coords"][0] == sel_fp
+            folium.Polygon(
+                b["coords"],
+                color="#ffffff" if is_sel else c,
+                weight=2.5 if is_sel else 0.8,
+                fill=True, fill_color=c,
+                fill_opacity=0.90 if is_sel else 0.60,
+                tooltip=f"{int(kwh):,} kWh/yr · {int(b['area_m2'])} m²",
+            ).add_to(m)
 
     if area_coords:
         folium.Polygon([(c[1], c[0]) for c in area_coords],
@@ -807,6 +892,16 @@ def _sec(html, last=False):
     c = "sec-last" if last else "sec"
     return f"<div class='{c}'>{html}</div>"
 
+def _source_badge(source: str) -> str:
+    """Small source + year label. Amber italic when data is estimated."""
+    estimated = source == "Estimated"
+    color  = "#b89030" if estimated else "#9aa0b8"
+    prefix = "~ " if estimated else ""
+    label  = source if source else "—"
+    title  = "title='No live data — showing geographic estimate'" if estimated else ""
+    return (f"<span style='font-size:10px;color:{color};font-style:italic' {title}>"
+            f"{prefix}{label} · 2020–2023</span>")
+
 def _row(lbl, val, col="#2a304a"):
     return (f"<div class='srow'>"
             f"<span class='muted'>{lbl}</span>"
@@ -819,7 +914,9 @@ def _init():
         lat=19.076, lon=72.878, loc_name="Mumbai",
         map_zoom=12, mode="point",
         area_bounds=None, area_coords=None,
-        viewport_bounds=None,
+        selected_building=None,
+        _prev_click=None,
+        satellite=False,
         # nav_id: incremented on each search so st_folium gets a fresh key.
         nav_id=0,
     )
@@ -845,16 +942,18 @@ def main():
     lbl   = solar_class(ghi)
     col   = gsa_color(ghi)
 
-    # Buildings (viewport-aware)
+    # Buildings — fixed 600 m radius around the solar point.
+    # Shown when user has enabled the rooftop overlay (satellite toggle).
+    show_bldgs = st.session_state.satellite
     buildings  = []
-    show_bldgs = zoom >= 14
     if show_bldgs and solar:
-        vp = st.session_state.viewport_bounds
-        if vp:
-            buildings = get_buildings(vp["south"], vp["west"], vp["north"], vp["east"])
-        else:
-            d = max(0.003, 0.035/(2**(zoom-14)))
-            buildings = get_buildings(lat-d, lon-d, lat+d, lon+d)
+        d = 0.006  # ≈ 660 m — small enough for fast Overpass, big enough to fill view
+        buildings = get_buildings(lat - d, lon - d, lat + d, lon + d)
+
+    # PVGIS system data — fetched when a building is selected (cached, ~1s first hit)
+    pvgis_sys = None
+    if st.session_state.mode == "building" and st.session_state.selected_building:
+        pvgis_sys = fetch_pvgis_system(lat, lon)
 
     # ══════════════════════════════════════════════════════════════════════════
     # SIDEBAR
@@ -884,6 +983,12 @@ def main():
         go_btn = st.button("→  Search", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
+        # Satellite / rooftop toggle
+        sat_label = "🛰 Satellite + Rooftops  ✓" if st.session_state.satellite else "🛰 Satellite + Rooftops"
+        if st.button(sat_label, use_container_width=True, key="sat_toggle"):
+            st.session_state.satellite = not st.session_state.satellite
+            st.rerun()
+
         if go_btn and query:
             with st.spinner(""):
                 loc = geocode(query)
@@ -892,11 +997,12 @@ def main():
                 st.session_state.lon      = loc["lon"]
                 st.session_state.loc_name = (
                     f"{loc['name']}{', '+loc['admin'] if loc['admin'] else ''}, {loc['country']}")
-                st.session_state.map_zoom        = 12
-                st.session_state.mode            = "point"
-                st.session_state.area_bounds     = None
-                st.session_state.area_coords     = None
-                st.session_state.viewport_bounds = None
+                st.session_state.map_zoom          = 12
+                st.session_state.mode              = "point"
+                st.session_state.area_bounds       = None
+                st.session_state.area_coords       = None
+                st.session_state.selected_building = None
+                st.session_state._prev_click       = None
                 # New nav_id → new st_folium key → fresh Leaflet instance.
                 st.session_state.nav_id += 1
                 st.rerun()
@@ -937,9 +1043,7 @@ def main():
   </div>
   <div style='display:flex;align-items:center;gap:8px;margin-top:6px'>
     <span class='badge' style='color:{col}'>{lbl}</span>
-    <span style='font-size:10px;color:#9aa0b8;font-style:italic'>
-      {solar.get("source","PVGIS")} · 2019–2023
-    </span>
+    {_source_badge(solar.get("source",""))}
   </div>
   <!-- GSA colour legend strip -->
   <div style='margin-top:10px'>
@@ -1042,6 +1146,74 @@ def main():
 </div>
 """), unsafe_allow_html=True)
 
+        # ── selected building ─────────────────────────────────────────────────
+        if st.session_state.mode == "building" and st.session_state.selected_building:
+            sb  = st.session_state.selected_building
+            pvg = pvgis_sys
+            tilt_txt = f"{pvg['tilt']}°"    if pvg and pvg.get("tilt")    is not None else "—"
+            az_txt   = f"{pvg['azimuth']}°" if pvg and pvg.get("azimuth") is not None else "—"
+            e_kwp    = f"{pvg['e_yr_kwp']:,} kWh/kWp/yr" if pvg and pvg.get("e_yr_kwp") else "—"
+            pvgis_url = (f"https://re.jrc.ec.europa.eu/pvg_tools/en/"
+                         f"?lat={lat:.4f}&lon={lon:.4f}")
+            st.markdown(_sec(f"""
+<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px'>
+  <span class='lbl-md' style='color:#c45d00;margin-bottom:0'>SELECTED BUILDING</span>
+  <span style='font-size:9px;color:#9aa0b8'>{sb["area_m2"]:.0f} m² roof</span>
+</div>
+<div class='area-card'>
+  <div style='display:grid;grid-template-columns:1fr 1fr;row-gap:12px'>
+    <div>
+      <div class='lbl'>ANNUAL YIELD</div>
+      <div class='val-lg accent-txt' style='margin-top:3px'>{sb["kwh_yr"]:,}</div>
+      <div style='font-size:9px;color:#9aa0b8'>kWh / year</div>
+    </div>
+    <div>
+      <div class='lbl'>PANELS (fit)</div>
+      <div class='val-lg' style='margin-top:3px;color:#1e2240'>{sb["panels"]}</div>
+      <div style='font-size:9px;color:#9aa0b8'>{sb["peak_kw"]} kWp system</div>
+    </div>
+    <div>
+      <div class='lbl'>SYSTEM COST</div>
+      <div class='val-md' style='margin-top:3px'>${sb["cost"]:,}</div>
+      <div style='font-size:9px;color:#9aa0b8'>at $1 / Wp</div>
+    </div>
+    <div>
+      <div class='lbl'>PAYBACK</div>
+      <div class='val-md pos-txt' style='margin-top:3px'>{sb["payback"]} yrs</div>
+      <div style='font-size:9px;color:#9aa0b8'>@ $0.12 / kWh</div>
+    </div>
+    <div>
+      <div class='lbl'>CO₂ OFFSET</div>
+      <div class='val-md pos-txt' style='margin-top:3px'>{sb["trees"]:,} trees/yr</div>
+    </div>
+    <div>
+      <div class='lbl'>OPTIMAL TILT</div>
+      <div class='val-md' style='margin-top:3px'>{tilt_txt}</div>
+      <div style='font-size:9px;color:#9aa0b8'>azimuth {az_txt}</div>
+    </div>
+  </div>
+  <div style='margin-top:10px;font-size:9px;color:#9aa0b8'>
+    PVGIS yield · {e_kwp}
+  </div>
+</div>
+<a href='{pvgis_url}' target='_blank' style='text-decoration:none'>
+  <div style='margin-top:8px;padding:8px 10px;
+    background:rgba(232,120,32,0.07);
+    border:1px solid rgba(232,120,32,0.22);border-radius:6px;
+    font-size:10.5px;font-weight:600;color:#c45d00;text-align:center'>
+    📐 Full PVGIS simulation for this roof →
+  </div>
+</a>
+<div style='font-size:9px;color:#b0b8d0;margin-top:6px'>
+  60% usable roof area assumed
+</div>
+"""), unsafe_allow_html=True)
+            if st.button("× Clear selection", key="clear_bldg", use_container_width=True):
+                st.session_state.selected_building = None
+                st.session_state._prev_click       = None
+                st.session_state.mode              = "point"
+                st.rerun()
+
         # ── panel calculator ──────────────────────────────────────────────────
         st.markdown("""
 <div class='sec' style='padding-bottom:4px'>
@@ -1115,9 +1287,9 @@ def main():
         st.markdown(f"""
 <div class='sec-last'>
   <div style='font-size:9px;color:#9aa0b8;line-height:1.9'>
-    Pan the map to move the solar brush<br>
+    Click the map to move the solar brush<br>
     Draw a rectangle for area solar analysis<br>
-    Zoom ≥ 14 to see building-level potential<br>
+    Toggle 🛰 Satellite to see rooftop potential<br>
     <span style='color:#bcc4d0'>NASA POWER · PVGIS · OSM · 2020–2023</span>
   </div>
 </div>
@@ -1128,50 +1300,26 @@ def main():
     # ══════════════════════════════════════════════════════════════════════════
     radius_m = int(radius_km * 1000)
     m = build_map(lat, lon, zoom, ghi, radius_m,
-                  buildings=buildings if show_bldgs else None,
-                  area_coords=st.session_state.area_coords)
+                  buildings=buildings,
+                  area_coords=st.session_state.area_coords,
+                  selected_bldg=st.session_state.selected_building,
+                  satellite=st.session_state.satellite)
 
     nav_id = st.session_state.nav_id
     map_data = st_folium(m,
         # "last_clicked" removed — unreliable across reruns/nav changes.
         # Location now tracks the map CENTER via bounds (pan to explore).
-        returned_objects=["last_active_drawing", "bounds", "zoom"],
+        returned_objects=["last_active_drawing", "last_clicked"],
         key=f"solar_map_{nav_id}",
         height=1200,          # CSS overrides this to 100vh; large fallback for tall screens
         use_container_width=True)
 
     # ── handle map events ──────────────────────────────────────────────────────
+    # "bounds" and "zoom" are intentionally NOT in returned_objects.
+    # Including them caused every pan/zoom to trigger a Streamlit rerun, which
+    # rebuilt the Folium map with a stale zoom_start → constant snap-back.
+    # Pan and zoom are now pure Leaflet viewport changes (no Streamlit reruns).
     if map_data:
-        # ── zoom tracking (NO forced rerun — avoid map snap on zoom) ──────────
-        # Buildings show/hide on the NEXT natural rerun (pan, slider, etc.).
-        # Removing the zoom_crossed rerun eliminates the jank users feel when
-        # zooming in/out quickly.
-        new_zoom = map_data.get("zoom")
-        if new_zoom:
-            st.session_state.map_zoom = new_zoom
-
-        # ── bounds → viewport + center-based location update ──────────────────
-        rb = map_data.get("bounds")
-        if rb:
-            sw, ne = rb["_southWest"], rb["_northEast"]
-            st.session_state.viewport_bounds = {
-                "south": sw["lat"], "west": sw["lng"],
-                "north": ne["lat"], "east": ne["lng"],
-            }
-            # Derive map center from bounds
-            c_lat = round((sw["lat"] + ne["lat"]) / 2, 4)
-            c_lon = round((sw["lng"] + ne["lng"]) / 2, 4)
-            # Only update when the user has panned significantly (>0.40° ≈ 44 km).
-            # Raised from 0.25° to reduce chatter on slow zooms/small pans.
-            if (abs(c_lat - lat) > 0.40 or abs(c_lon - lon) > 0.40):
-                st.session_state.lat         = c_lat
-                st.session_state.lon         = c_lon
-                st.session_state.mode        = "point"
-                st.session_state.area_bounds = None
-                st.session_state.area_coords = None
-                st.session_state.loc_name    = reverse_geocode(c_lat, c_lon)
-                st.rerun()
-
         # ── rectangle draw ────────────────────────────────────────────────────
         drawing = map_data.get("last_active_drawing")
         if drawing and drawing.get("geometry", {}).get("type") == "Polygon":
@@ -1181,9 +1329,54 @@ def main():
             nb     = {"south": min(lats), "north": max(lats),
                       "west":  min(lons),  "east":  max(lons)}
             if nb != st.session_state.area_bounds:
-                st.session_state.area_bounds = nb
-                st.session_state.area_coords = coords
-                st.session_state.mode = "area"
+                st.session_state.area_bounds       = nb
+                st.session_state.area_coords       = coords
+                st.session_state.selected_building = None
+                st.session_state.mode              = "area"
+                st.rerun()
+
+        # ── click: select building OR move solar circle ────────────────────────
+        # last_clicked persists across reruns — _prev_click guard prevents the
+        # same click from re-firing on every subsequent rerun.
+        clicked = map_data.get("last_clicked")
+        if (clicked
+                and clicked != st.session_state._prev_click
+                and st.session_state.mode != "area"):
+            st.session_state._prev_click = clicked
+            clat, clon = clicked["lat"], clicked["lng"]
+
+            hit = (next((b for b in buildings
+                         if _point_in_poly(clat, clon, b["coords"])), None)
+                   if buildings else None)
+
+            if hit:
+                kwh    = bldg_kwh(hit["area_m2"], ghi)
+                panels = max(1, int(hit["area_m2"] * 0.6 / PANEL_M2))
+                peak   = round(panels * PANEL_W / 1000, 1)
+                cost   = round(panels * PANEL_W * COST_USD_W)
+                new_sel = {
+                    "coords":  hit["coords"],
+                    "area_m2": hit["area_m2"],
+                    "kwh_yr":  round(kwh),
+                    "panels":  panels,
+                    "peak_kw": peak,
+                    "cost":    cost,
+                    "payback": round(cost / (kwh * 0.12), 1) if kwh > 0 else None,
+                    "trees":   round(kwh * CO2_G_KWH / 1000 / 21),
+                }
+                if new_sel["coords"] != (st.session_state.selected_building or {}).get("coords"):
+                    st.session_state.selected_building = new_sel
+                    st.session_state.mode              = "building"
+                    st.rerun()
+            else:
+                # Move solar circle to click point
+                st.session_state.lat               = clat
+                st.session_state.lon               = clon
+                st.session_state.mode              = "point"
+                st.session_state.area_bounds       = None
+                st.session_state.area_coords       = None
+                st.session_state.selected_building = None
+                st.session_state.loc_name          = reverse_geocode(clat, clon)
                 st.rerun()
 
 if __name__ == "__main__":
