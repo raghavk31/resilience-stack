@@ -4,3 +4,5 @@
 | Day | Tool | Status |
 |-----|------|--------|
 | 01 | Global Grid Stress Map | Live |
+| 02 | Solar Potential Atlas | Live |
+| 03 | Water Stress Index | Live |
