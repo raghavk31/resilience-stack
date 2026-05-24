@@ -17,13 +17,13 @@ WB_BASE = "https://api.worldbank.org/v2/country/all/indicator"
 HEADERS = {"User-Agent": "ResilienceStack/1.0 (raghav@perspectives.community)"}
 
 INDICATORS = {
-    "withdrawal_pct":  "ER.H2O.FWTL.ZS",  # % of available freshwater
-    "withdrawal_cap":  "ER.H2O.FWST.ZS",  # m³ per capita withdrawn
-    "freshwater_cap":  "ER.H2O.INTR.PC",  # renewable freshwater per capita (m³)
-    "safe_access":     "SH.H2O.BASW.ZS",  # % with basic water access
-    "agri_share":      "ER.H2O.FWAG.ZS",  # agriculture % of withdrawals
-    "industry_share":  "ER.H2O.FWIN.ZS",  # industry % of withdrawals
-    "domestic_share":  "ER.H2O.FWDM.ZS",  # domestic % of withdrawals
+    "withdrawal_pct":  "ER.H2O.FWTL.ZS",
+    "withdrawal_cap":  "ER.H2O.FWST.ZS",
+    "freshwater_cap":  "ER.H2O.INTR.PC",
+    "safe_access":     "SH.H2O.BASW.ZS",
+    "agri_share":      "ER.H2O.FWAG.ZS",
+    "industry_share":  "ER.H2O.FWIN.ZS",
+    "domestic_share":  "ER.H2O.FWDM.ZS",
 }
 
 BANDS = [
@@ -43,10 +43,48 @@ CSCALE = [
     (1.00, "#ef4444"),
 ]
 
+# Colour cap: countries above this are shown as a distinct "extreme" dark maroon
+COLOR_CAP = 150
+
+# Freshwater per-capita scarcity thresholds (m³/person/year — UN/FAO standard)
+FW_THRESHOLDS = [
+    (500,  "absolute scarcity",  "#ef4444"),
+    (1000, "scarcity",           "#f97316"),
+    (1700, "stress",             "#eab308"),
+]
+
+# Country-specific fossil groundwater narratives for the most extreme cases
+FOSSIL_STORIES = {
+    "EGY": ("Egypt's figure reflects near-total dependence on the Nile, which "
+            "originates outside its borders and provides ~97% of its water. "
+            "Beneath the western desert, fossil Nubian Sandstone Aquifer water "
+            "is also being mined — formed over 20,000 years ago."),
+    "BHR": ("Bahrain has no rivers and barely any rain. Every drop comes from "
+            "desalination plants or shared fossil aquifers beneath the Gulf — "
+            "resources with no meaningful natural recharge rate."),
+    "SAU": ("Saudi Arabia built its green revolution on the Great Artesian fossil "
+            "aquifer. That water is now largely depleted; the kingdom has largely "
+            "abandoned domestic wheat farming and pivoted to food imports."),
+    "ARE": ("The UAE meets demand through among the world's most energy-intensive "
+            "desalination infrastructure. Freshwater is effectively manufactured "
+            "from seawater — at enormous carbon cost."),
+    "LBY": ("Libya's Great Man-Made River pumps ancient Saharan aquifer water "
+            "1,000 km north to coastal cities. At current rates, reserves are "
+            "estimated to last 60–100 years before collapse."),
+    "TKM": ("Soviet-era cotton irrigation in Turkmenistan diverted the Amu Darya "
+            "so aggressively that the Aral Sea — once Earth's 4th largest lake — "
+            "has almost entirely disappeared."),
+    "PAK": ("Pakistan's Indus basin faces converging crises: glacial melt, "
+            "monsoon variability, and rapid groundwater depletion — high "
+            "withdrawal coexists with catastrophic seasonal water insecurity."),
+    "SDN": ("Sudan draws heavily on Nile tributaries and fossil groundwater. "
+            "Contested with Ethiopia over the Grand Renaissance Dam, its water "
+            "future is as much geopolitical as it is hydrological."),
+}
+
 # ── CSS ────────────────────────────────────────────────────────────────────────
 CSS = """
 <style>
-/* Global dark background */
 body,
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"] {
@@ -60,8 +98,6 @@ body,
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
-
-/* Sidebar dark panel */
 [data-testid="stSidebar"] {
     background: #08080f !important;
     border-right: 1px solid #14142a !important;
@@ -81,12 +117,9 @@ body,
     letter-spacing: -0.02em !important;
     margin: 4px 0 0 !important;
 }
-
-/* Hide chrome */
 #MainMenu, footer, [data-testid="stToolbar"],
 [data-testid="stDecoration"] { display: none !important; }
 
-/* Selectbox / radio dark */
 [data-testid="stSidebar"] [data-baseweb="select"] > div,
 [data-testid="stSidebar"] [data-baseweb="select"] input {
     background: #0d0d1a !important;
@@ -94,7 +127,6 @@ body,
     color: #c8c8d4 !important;
 }
 
-/* ── Metric grid ── */
 .metrics-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -131,8 +163,8 @@ body,
 }
 .bench-up   { color: #ef4444; }
 .bench-down { color: #22d3ee; }
+.bench-fw   { color: #f97316; font-style: italic; }
 
-/* ── Stress badge ── */
 .stress-badge {
     display: inline-flex;
     align-items: center;
@@ -147,20 +179,10 @@ body,
     margin-bottom: 10px;
 }
 .stress-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
+    width: 6px; height: 6px;
+    border-radius: 50%; flex-shrink: 0;
 }
 
-/* ── Story card ── */
-.story-card {
-    font-size: 12px;
-    line-height: 1.85;
-    color: #7070888;
-    margin-bottom: 16px;
-    color: #6868808;
-}
 .story-card {
     font-size: 12.5px;
     line-height: 1.8;
@@ -168,7 +190,6 @@ body,
     margin-bottom: 16px;
 }
 
-/* ── Fossil water reveal panel ── */
 .fossil-reveal {
     border-left: 2px solid #f97316;
     background: rgba(249,115,22,0.05);
@@ -196,7 +217,6 @@ body,
     letter-spacing: 0.02em;
 }
 
-/* ── Sector bars ── */
 .sector-row { margin-bottom: 11px; }
 .sector-label-row {
     display: flex;
@@ -207,12 +227,8 @@ body,
     color: #3a3a52;
     margin-bottom: 5px;
 }
-.sector-track {
-    height: 3px;
-    background: #14142a;
-    border-radius: 2px;
-}
-.sector-fill { height: 3px; border-radius: 2px; }
+.sector-track { height: 3px; background: #14142a; border-radius: 2px; }
+.sector-fill  { height: 3px; border-radius: 2px; }
 .agri-callout {
     font-size: 11px;
     color: #3a3a52;
@@ -221,7 +237,6 @@ body,
     font-style: italic;
 }
 
-/* ── Global stats strip ── */
 .stats-strip {
     display: flex;
     gap: 0;
@@ -234,18 +249,18 @@ body,
     padding-right: 24px;
     border-right: 1px solid #14142a;
     margin-right: 24px;
+    min-width: 0;
 }
-.stat-item:last-child {
-    border-right: none;
-    margin-right: 0;
-    padding-right: 0;
-}
+.stat-item:last-child { border-right: none; margin-right: 0; padding-right: 0; }
 .stat-n {
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 700;
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     line-height: 1.1;
     margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .stat-l {
     font-size: 9px;
@@ -255,34 +270,43 @@ body,
     line-height: 1.4;
 }
 
-/* ── Separator ── */
-.sep {
-    border: none;
-    border-top: 1px solid #14142a;
-    margin: 18px 0;
-}
-.country-heading {
-    font-size: 17px;
-    font-weight: 700;
-    color: #e8e8f0;
-    letter-spacing: -0.01em;
-    line-height: 1.25;
-    margin-bottom: 2px;
-}
-.day-label {
-    font-size: 9px;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: #2a2a42;
-}
-.data-footer {
+.no-data-note {
     font-size: 10px;
     color: #2a2a42;
     letter-spacing: 0.04em;
-    line-height: 2.0;
+    padding: 4px 24px 8px;
 }
 
-/* ── Tabs ── */
+.sep { border: none; border-top: 1px solid #14142a; margin: 18px 0; }
+.country-heading {
+    font-size: 17px; font-weight: 700;
+    color: #e8e8f0; letter-spacing: -0.01em;
+    line-height: 1.25; margin-bottom: 2px;
+}
+.radio-label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a3a52;
+    margin-bottom: 6px;
+    display: block;
+}
+.day-label {
+    font-size: 9px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: #2a2a42;
+}
+.data-footer {
+    font-size: 10px; color: #2a2a42;
+    letter-spacing: 0.04em; line-height: 2.0;
+}
+.stale-note {
+    font-size: 10px;
+    color: #44445a;
+    letter-spacing: 0.03em;
+    padding: 6px 0 0;
+    font-style: italic;
+}
+
 button[data-baseweb="tab"] {
     color: #3a3a52 !important;
     font-size: 11px !important;
@@ -290,12 +314,8 @@ button[data-baseweb="tab"] {
     text-transform: uppercase !important;
     background: transparent !important;
 }
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: #c8c8d4 !important;
-}
-[data-testid="stTabs"] [data-baseweb="tab-border"] {
-    background: #14142a !important;
-}
+button[data-baseweb="tab"][aria-selected="true"] { color: #c8c8d4 !important; }
+[data-testid="stTabs"] [data-baseweb="tab-border"] { background: #14142a !important; }
 [data-testid="stDataFrame"] { background: transparent !important; }
 </style>
 """
@@ -418,15 +438,12 @@ def global_stats(df: pd.DataFrame) -> dict:
 def country_story(r: pd.Series, rank: int, global_avg: float) -> str:
     pct  = r.withdrawal_pct
     name = r.country_name
-
-    # Opening line — stress-level framing
     if pct > 100:
         opening = (f"{name} withdraws {pct:.0f}% of its renewable freshwater — "
                    f"far more than nature replenishes each year.")
     elif pct > 80:
         opening = (f"With {pct:.0f}% of its renewable supply already in use, "
-                   f"{name} is in critical water stress — one of the most "
-                   f"water-pressured countries on Earth.")
+                   f"{name} is in critical water stress.")
     elif pct > 40:
         opening = (f"{name} draws {pct:.0f}% of its renewable supply, crossing "
                    f"the UN high-stress threshold of 40%.")
@@ -439,17 +456,13 @@ def country_story(r: pd.Series, rank: int, global_avg: float) -> str:
     else:
         opening = (f"{name} has exceptional water abundance, drawing just "
                    f"{pct:.1f}% of its renewable supply.")
-
-    # Middle — sector or multiplier angle
-    agri = r.agri_share
+    agri   = r.agri_share
     agri_ok = agri is not None and not pd.isna(agri)
-    mult = pct / global_avg if global_avg > 0 else 1.0
-
+    mult   = pct / global_avg if global_avg > 0 else 1.0
     if agri_ok and agri > 85:
-        middle = (f"Nearly all withdrawals — {agri:.0f}% — go to agriculture, "
-                  f"typical of arid farming economies.")
+        middle = (f"Nearly all withdrawals — {agri:.0f}% — go to agriculture.")
     elif agri_ok and agri < 35:
-        middle = (f"Unusually, farming accounts for only {agri:.0f}% of withdrawals; "
+        middle = (f"Unusually, farming is only {agri:.0f}% of withdrawals; "
                   f"industry and urban demand lead.")
     elif mult >= 3:
         middle = f"That's {mult:.1f}× the world average of {global_avg:.0f}%."
@@ -458,15 +471,10 @@ def country_story(r: pd.Series, rank: int, global_avg: float) -> str:
                   f"{name} uses a fraction of that.")
     else:
         middle = f"The global average for comparison is {global_avg:.0f}%."
-
-    # End — rank
-    end = f"Ranked #{rank} globally by water stress."
-
-    return f"{opening} {middle} {end}"
+    return f"{opening} {middle} Ranked #{rank} globally."
 
 
 def threshold_crossings(trend_df: pd.DataFrame) -> dict[str, int]:
-    """Return {label: first_year_crossed} for HIGH (40%) and CRITICAL (80%)."""
     if trend_df.empty:
         return {}
     crossings: dict[str, int] = {}
@@ -482,6 +490,36 @@ def threshold_crossings(trend_df: pd.DataFrame) -> dict[str, int]:
     return crossings
 
 
+def detect_stale_trend(trend_df: pd.DataFrame) -> int | None:
+    """Return the first year the trend went flat (same value repeated 3+ times)."""
+    if len(trend_df) < 4:
+        return None
+    df_s = trend_df.sort_values("year").reset_index(drop=True)
+    last_val = round(df_s["value"].iloc[-1], 3)
+    flat_mask = df_s["value"].apply(lambda v: round(v, 3) == last_val)
+    flat_indices = df_s.index[flat_mask].tolist()
+    if len(flat_indices) < 3:
+        return None
+    # Require consecutive run ending at the last row
+    if flat_indices[-1] != len(df_s) - 1:
+        return None
+    run_start = flat_indices[0]
+    # Ensure all from run_start onwards are flat
+    if flat_mask.iloc[run_start:].all():
+        return int(df_s.loc[run_start, "year"])
+    return None
+
+
+def freshwater_threshold_label(val) -> str:
+    """Return scarcity tier label for renewable freshwater per capita."""
+    if val is None or pd.isna(val):
+        return ""
+    for threshold, label, _ in FW_THRESHOLDS:
+        if val < threshold:
+            return f"· {label} (<{threshold:,} m³)"
+    return "· above stress threshold"
+
+
 # ── Chart factories ───────────────────────────────────────────────────────────
 def make_map(df: pd.DataFrame, selected_iso: str, metric: str) -> go.Figure:
     col = "withdrawal_pct" if metric == "Withdrawal %" else "withdrawal_cap"
@@ -490,19 +528,49 @@ def make_map(df: pd.DataFrame, selected_iso: str, metric: str) -> go.Figure:
         "withdrawal_cap": "Withdrawal<br>m³/capita",
     }
     plot_df = df.dropna(subset=[col])
-    cmax = max(plot_df[col].quantile(0.95), 1) if not plot_df.empty else 100
+
+    # Fix 3: separate extreme outliers so the colour scale is meaningful
+    if col == "withdrawal_pct":
+        cap     = COLOR_CAP
+        df_norm = plot_df[plot_df[col] <= cap].copy()
+        df_xtm  = plot_df[plot_df[col] > cap].copy()
+    else:
+        cap     = max(plot_df[col].quantile(0.95), 1) if not plot_df.empty else 100
+        df_norm = plot_df
+        df_xtm  = pd.DataFrame()
 
     fig = px.choropleth(
-        plot_df,
+        df_norm,
         locations="iso",
         locationmode="ISO-3",
         color=col,
         color_continuous_scale=CSCALE,
-        range_color=[0, cmax],
+        range_color=[0, cap],
         hover_name="country_name",
         hover_data={col: ":.1f", "iso": False},
         labels={col: label_map[col]},
     )
+
+    # Extreme countries: distinct dark-maroon trace with warning hover
+    if not df_xtm.empty:
+        fig.add_trace(go.Choropleth(
+            locations=df_xtm["iso"],
+            locationmode="ISO-3",
+            z=[1] * len(df_xtm),
+            colorscale=[[0, "#450a0a"], [1, "#450a0a"]],
+            showscale=False,
+            marker_line_color="#f97316",
+            marker_line_width=0.8,
+            hovertext=df_xtm.apply(
+                lambda r: (f"<b>{r.country_name}</b><br>"
+                           f"{r[col]:.0f}% — extreme withdrawal<br>"
+                           f"<i>Mining fossil groundwater</i>"),
+                axis=1,
+            ),
+            hoverinfo="text",
+            name="Extreme (>150%)",
+        ))
+
     fig.update_geos(
         bgcolor="#05050a", landcolor="#0d0d1a",
         oceancolor="#060a0f", lakecolor="#060a0f",
@@ -511,6 +579,7 @@ def make_map(df: pd.DataFrame, selected_iso: str, metric: str) -> go.Figure:
         showland=True, showocean=True, showlakes=True,
         projection_type="natural earth",
     )
+
     if selected_iso and selected_iso in df["iso"].values:
         fig.add_trace(go.Choropleth(
             locations=[selected_iso], locationmode="ISO-3",
@@ -518,17 +587,24 @@ def make_map(df: pd.DataFrame, selected_iso: str, metric: str) -> go.Figure:
             showscale=False, marker_line_color="#ffffff",
             marker_line_width=1.8, hoverinfo="skip",
         ))
+
+    colorbar_title = label_map[col]
+    if col == "withdrawal_pct":
+        colorbar_title += f"<br>(capped at {cap}% —<br>dark red = extreme)"
+
     fig.update_layout(
         paper_bgcolor="#05050a", plot_bgcolor="#05050a",
         margin=dict(l=0, r=0, t=0, b=0),
+        height=530,  # Fix 9: fixed map height
         coloraxis_colorbar=dict(
-            title=dict(text=label_map[col], font=dict(color="#3a3a52", size=9)),
+            title=dict(text=colorbar_title, font=dict(color="#3a3a52", size=9)),
             tickfont=dict(color="#3a3a52", size=9),
             bgcolor="rgba(8,8,15,0.7)", borderwidth=0,
             thickness=10, len=0.38, x=0.99,
         ),
         geo=dict(bgcolor="#05050a"),
         dragmode=False,
+        showlegend=False,
     )
     return fig
 
@@ -537,9 +613,38 @@ def make_trend_chart(
     trend_df: pd.DataFrame,
     country_name: str,
     crossings: dict[str, int] | None = None,
+    stale_year: int | None = None,
 ) -> go.Figure:
     crossings = crossings or {}
     fig = go.Figure()
+
+    # Fix 1: shade the stale (fill-forward) region
+    if stale_year is not None:
+        x_max = int(trend_df["year"].max()) + 1
+        y_max = float(trend_df["value"].max()) * 1.3
+        fig.add_shape(
+            type="rect",
+            x0=stale_year - 0.5, x1=x_max,
+            y0=0, y1=y_max,
+            fillcolor="rgba(255,255,255,0.02)",
+            line=dict(color="rgba(255,255,255,0)", width=0),
+            layer="below",
+        )
+        fig.add_annotation(
+            x=(stale_year + x_max) / 2,
+            y=y_max * 0.97,
+            text=f"No new data after {stale_year}<br>(World Bank fill-forward)",
+            showarrow=False,
+            font=dict(color="#3a3a52", size=9),
+            xanchor="center", yanchor="top",
+            bgcolor="rgba(0,0,0,0)",
+        )
+        # Dashed vertical line at stale start
+        fig.add_vline(
+            x=stale_year - 0.5,
+            line_dash="dot", line_color="#2a2a42", line_width=1,
+        )
+
     fig.add_trace(go.Scatter(
         x=trend_df["year"], y=trend_df["value"],
         mode="lines+markers",
@@ -549,29 +654,25 @@ def make_trend_chart(
         hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
     ))
 
-    max_val = trend_df["value"].max()
+    max_val = float(trend_df["value"].max())
 
-    # UN thresholds
     for y_val, txt, col in [
         (40, "High stress (40%)", "#f97316"),
         (80, "Critical (80%)",    "#ef4444"),
     ]:
-        if y_val <= max_val * 1.2:
+        if y_val <= max_val * 1.25:
             fig.add_hline(
                 y=y_val, line_dash="dot", line_color=col, line_width=1,
                 annotation_text=txt, annotation_font_color=col,
                 annotation_font_size=10, annotation_position="top right",
             )
 
-    # Threshold crossing vertical markers
     cross_colours = {"HIGH": "#f97316", "CRITICAL": "#ef4444"}
     for label, yr in crossings.items():
         col = cross_colours.get(label, "#aaaaaa")
-        fig.add_vline(
-            x=yr, line_dash="dot", line_color=col, line_width=1.2,
-        )
+        fig.add_vline(x=yr, line_dash="dot", line_color=col, line_width=1.2)
         fig.add_annotation(
-            x=yr, y=max_val * 0.92,
+            x=yr, y=max_val * 0.85,
             text=f"← Crossed {label} ({yr})",
             showarrow=False,
             font=dict(color=col, size=10),
@@ -582,7 +683,7 @@ def make_trend_chart(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#080810",
         font=dict(color="#9898a8", size=11),
         title=dict(
-            text=f"{country_name} — Freshwater Withdrawal since 1990",
+            text=f"{country_name} — Freshwater Withdrawal 1990–2024",
             font=dict(color="#c8c8d4", size=13), x=0.01,
         ),
         xaxis=dict(gridcolor="#14142a", color="#3a3a52",
@@ -597,22 +698,65 @@ def make_trend_chart(
     return fig
 
 
+def make_compare_chart(df: pd.DataFrame, iso_a: str, iso_b: str,
+                       name_a: str, name_b: str) -> go.Figure:
+    metrics = [
+        ("withdrawal_pct", "Withdrawal %",      "%"),
+        ("safe_access",    "Safe Access %",     "%"),
+        ("agri_share",     "Agriculture Share", "%"),
+    ]
+    fig = go.Figure()
+    for col, label, _ in metrics:
+        va = df.loc[df["iso"] == iso_a, col].values
+        vb = df.loc[df["iso"] == iso_b, col].values
+        va = float(va[0]) if len(va) and va[0] is not None and not pd.isna(va[0]) else 0
+        vb = float(vb[0]) if len(vb) and vb[0] is not None and not pd.isna(vb[0]) else 0
+        fig.add_trace(go.Bar(
+            name=name_a, x=[label], y=[va],
+            marker_color="#60a5fa", showlegend=(col == "withdrawal_pct"),
+        ))
+        fig.add_trace(go.Bar(
+            name=name_b, x=[label], y=[vb],
+            marker_color="#a78bfa", showlegend=(col == "withdrawal_pct"),
+        ))
+    fig.update_layout(
+        barmode="group",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#080810",
+        font=dict(color="#9898a8", size=11),
+        legend=dict(font=dict(color="#9898a8"), bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(gridcolor="#14142a", color="#3a3a52", showline=False),
+        yaxis=dict(gridcolor="#14142a", color="#3a3a52", showline=False,
+                   title="%", title_font=dict(color="#3a3a52", size=10)),
+        margin=dict(l=10, r=20, t=20, b=10),
+        height=280,
+    )
+    return fig
+
+
 # ── HTML builders ─────────────────────────────────────────────────────────────
 def _benchmark_span(val, avg, higher_is_worse=True) -> str:
-    """Small comparison text: 'vs. world avg X%'."""
     if val is None or avg is None or pd.isna(val) or pd.isna(avg) or avg == 0:
         return ""
     ratio = val / avg
     if ratio >= 2:
-        cls  = "bench-up" if higher_is_worse else "bench-down"
-        txt  = f"↑ {ratio:.1f}× world avg ({avg:,.0f})"
+        cls = "bench-up" if higher_is_worse else "bench-down"
+        txt = f"↑ {ratio:.1f}× world avg ({avg:,.0f})"
     elif ratio <= 0.5:
-        cls  = "bench-down" if higher_is_worse else "bench-up"
-        txt  = f"↓ {ratio:.1f}× world avg ({avg:,.0f})"
+        cls = "bench-down" if higher_is_worse else "bench-up"
+        txt = f"↓ {ratio:.1f}× world avg ({avg:,.0f})"
     else:
-        cls  = ""
-        txt  = f"world avg {avg:,.0f}"
+        cls = ""
+        txt = f"world avg {avg:,.0f}"
     return f'<span class="benchmark {cls}">{txt}</span>'
+
+
+def _fw_threshold_span(val) -> str:
+    if val is None or pd.isna(val):
+        return ""
+    for threshold, label, colour in FW_THRESHOLDS:
+        if val < threshold:
+            return f'<span class="benchmark bench-fw">· {label} (&lt;{threshold:,} m³)</span>'
+    return '<span class="benchmark">· above stress threshold</span>'
 
 
 def _sector_bars(agri, ind, dom) -> str:
@@ -639,44 +783,45 @@ def _agri_callout(agri, country_name: str) -> str:
     if agri is None or pd.isna(agri):
         return "Agriculture accounts for ~70% of global freshwater withdrawals."
     if agri > 90:
-        return (f"{country_name} is exceptionally agriculture-dependent — "
-                f"9 in 10 litres go to crops.")
+        return f"{country_name} is exceptionally agriculture-dependent — 9 in 10 litres go to crops."
     if agri > 70:
-        return (f"Agriculture dominates at {agri:.0f}% — above the global average of 70%.")
+        return f"Agriculture dominates at {agri:.0f}% — above the global average of 70%."
     if agri < 35:
-        return (f"Unusually, industry and urban use outweigh farming here — "
+        return (f"Unusually, industry and urban use outweigh farming — "
                 f"agriculture is just {agri:.0f}% of withdrawals.")
-    return f"Agriculture takes {agri:.0f}% of withdrawals — the global average is 70%."
+    return f"Agriculture takes {agri:.0f}% of withdrawals; global average is 70%."
 
 
 def _country_panel(r: pd.Series, rank: int, avgs: dict) -> str:
-    pct         = r.withdrawal_pct
+    pct          = r.withdrawal_pct
     label, fg, bg = stress_band(pct)
-    story_text  = country_story(r, rank, avgs["withdrawal_pct"])
+    story_text   = country_story(r, rank, avgs["withdrawal_pct"])
 
-    # Fossil water reveal panel
+    # Fix 7: country-specific fossil narrative
     if pct > 100:
-        excess = pct - 100
+        excess    = pct - 100
+        specific  = FOSSIL_STORIES.get(r.iso, "")
+        body_text = (specific if specific else
+                     "This country withdraws more water than nature replenishes each year. "
+                     "The deficit is drawn from fossil aquifers that cannot refill on "
+                     "any human timescale.")
         fossil_html = f"""
 <div class="fossil-reveal">
   <div class="fossil-title">⚠ Mining Ancient Water</div>
-  <div class="fossil-body">This country withdraws more water than nature
-  replenishes each year. The deficit is drawn from fossil aquifers —
-  groundwater reserves that formed over thousands of years. Once
-  depleted, they cannot refill on any human timescale.</div>
-  <div class="fossil-stat">Drawing {excess:.0f}% over the annual recharge rate</div>
+  <div class="fossil-body">{body_text}</div>
+  <div class="fossil-stat">Drawing {excess:.0f}% over annual recharge limit</div>
 </div>"""
     else:
         fossil_html = ""
 
-    # Metric cells with benchmark anchors
     cells = [
         ("Withdrawal",  _fmt(pct, 1),            "%",
          _benchmark_span(pct, avgs["withdrawal_pct"], higher_is_worse=True)),
         ("Per Capita",  _fmt(r.withdrawal_cap, 0), "m³",
          _benchmark_span(r.withdrawal_cap, avgs["withdrawal_cap"], higher_is_worse=True)),
+        # Fix 2: freshwater threshold label
         ("Freshwater",  _fmt(r.freshwater_cap, 0), "m³/cap",
-         _benchmark_span(r.freshwater_cap, avgs["freshwater_cap"], higher_is_worse=False)),
+         _fw_threshold_span(r.freshwater_cap)),
         ("Safe Access", _fmt(r.safe_access, 1),    "%",
          _benchmark_span(r.safe_access, avgs["safe_access"], higher_is_worse=False)),
     ]
@@ -698,12 +843,13 @@ def _country_panel(r: pd.Series, rank: int, avgs: dict) -> str:
 
 
 def _stats_strip(gs: dict) -> str:
+    top_short = gs["top_name"].split(",")[0]  # "Egypt, Arab Rep." → "Egypt"
     items = [
-        (f"{gs['critical_count']}",        "countries in critical stress (&gt;80%)",  "#ef4444"),
-        (f"{gs['fossil_count']}",           "drawing down fossil groundwater (&gt;100%)", "#f97316"),
-        (f"{gs['global_avg']:.0f}%",        "global average withdrawal",               "#60a5fa"),
-        (gs["top_name"],
-         f"most stressed &mdash; {gs['top_pct']:.0f}%",                               "#a78bfa"),
+        (f"{gs['critical_count']}",   "countries in critical stress (&gt;80%)",      "#ef4444"),
+        (f"{gs['fossil_count']}",     "mining fossil groundwater (&gt;100%)",         "#f97316"),
+        (f"{gs['global_avg']:.0f}%",  "global average withdrawal",                   "#60a5fa"),
+        (f"{top_short}",
+         f"most stressed &mdash; {gs['top_pct']:.0f}%",                              "#a78bfa"),
     ]
     parts = "".join(f"""
 <div class="stat-item">
@@ -717,7 +863,7 @@ def _stats_strip(gs: dict) -> str:
 st.markdown(CSS, unsafe_allow_html=True)
 
 with st.spinner("Loading freshwater data…"):
-    df = load_water_data()
+    df    = load_water_data()
     names = load_country_names()
 
 df["country_name"] = df["iso"].map(names).fillna(df["iso"])
@@ -725,11 +871,9 @@ iso_to_name = dict(zip(df["iso"], df["country_name"]))
 name_to_iso = {v: k for k, v in iso_to_name.items()}
 iso_list    = sorted(iso_to_name.values())
 
-# Global stats — computed once, used in strip + panel
 gs   = global_stats(df)
 avgs = gs["avgs"]
 
-# Rank lookup (1 = most stressed)
 rank_series = df["withdrawal_pct"].rank(ascending=False, method="min").astype(int)
 iso_to_rank = dict(zip(df["iso"], rank_series))
 
@@ -752,17 +896,19 @@ with st.sidebar:
         st.query_params["iso"] = chosen_iso
         st.rerun()
 
+    # Fix 6: visible label for the metric radio
+    st.markdown('<span class="radio-label">Colour map by</span>',
+                unsafe_allow_html=True)
     metric = st.radio("Colour map by", ["Withdrawal %", "Per Capita m³"],
                       horizontal=True, label_visibility="collapsed")
 
     st.markdown('<hr class="sep">', unsafe_allow_html=True)
 
-    iso     = st.session_state.iso
-    row_df  = df[df["iso"] == iso]
+    iso    = st.session_state.iso
+    row_df = df[df["iso"] == iso]
 
     if not row_df.empty:
         r = row_df.iloc[0].copy()
-        # Derive municipal if missing
         if (pd.isna(r.domestic_share) or r.domestic_share is None) \
                 and not pd.isna(r.agri_share) and not pd.isna(r.industry_share):
             r["domestic_share"] = max(0.0, 100.0 - r.agri_share - r.industry_share)
@@ -783,7 +929,7 @@ with st.sidebar:
 
         st.markdown('<hr class="sep">', unsafe_allow_html=True)
         st.markdown(
-            f'<div class="data-footer">Data as of {r.year}<br>Source: World Bank</div>',
+            f'<div class="data-footer">Data as of {r.year} · World Bank</div>',
             unsafe_allow_html=True,
         )
     else:
@@ -801,8 +947,16 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-# ── Main: stats strip + full-width map ───────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 st.markdown(_stats_strip(gs), unsafe_allow_html=True)
+
+# Fix 8: grey-country note
+no_data_count = 250 - len(df)  # rough world country count
+st.markdown(
+    f'<div class="no-data-note">Grey countries have no World Bank data available. '
+    f'Dark red countries exceed {COLOR_CAP}% withdrawal (extreme scale).</div>',
+    unsafe_allow_html=True,
+)
 
 fig = make_map(df, st.session_state.iso, metric)
 event = st.plotly_chart(
@@ -822,7 +976,11 @@ if event and event.selection and event.selection.get("points"):
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 st.markdown("<div style='padding: 0 20px'>", unsafe_allow_html=True)
-tab1, tab2 = st.tabs(["  Trend since 1990  ", "  Most Stressed Countries  "])
+tab1, tab2, tab3 = st.tabs([
+    "  Trend since 1990  ",
+    "  Most Stressed  ",
+    "  Compare Countries  ",
+])
 
 with tab1:
     iso          = st.session_state.iso
@@ -836,37 +994,111 @@ with tab1:
             unsafe_allow_html=True,
         )
     else:
-        crossings = threshold_crossings(trend)
+        crossings  = threshold_crossings(trend)
+        stale_year = detect_stale_trend(trend)
+        if stale_year:
+            st.markdown(
+                f'<div class="stale-note">⚠ World Bank data for {country_name} '
+                f'has not been updated since {stale_year}. '
+                f'The flat portion of the chart reflects repeated values, not actual stability.</div>',
+                unsafe_allow_html=True,
+            )
         st.plotly_chart(
-            make_trend_chart(trend, country_name, crossings),
+            make_trend_chart(trend, country_name, crossings, stale_year),
             use_container_width=True,
             config={"displayModeBar": False},
         )
 
 with tab2:
+    # Fix 4: keep raw floats, use column_config for formatted display + numeric sort
     top20 = (
         df.nlargest(20, "withdrawal_pct")
         [["country_name", "withdrawal_pct", "agri_share",
           "industry_share", "domestic_share", "year"]]
         .copy()
+        .reset_index(drop=True)
     )
-    top20.rename(columns={
-        "country_name":   "Country",
-        "withdrawal_pct": "Withdrawal %",
-        "agri_share":     "Agriculture %",
-        "industry_share": "Industry %",
-        "domestic_share": "Municipal %",
-        "year":           "Data Year",
-    }, inplace=True)
-
-    def _pct_fmt(x):
-        return f"{x:.1f}%" if pd.notna(x) else "—"
-
-    for col in ["Withdrawal %", "Agriculture %", "Industry %", "Municipal %"]:
-        top20[col] = top20[col].apply(_pct_fmt)
-
-    top20 = top20.reset_index(drop=True)
     top20.index += 1
-    st.dataframe(top20, use_container_width=True, height=480)
+    st.dataframe(
+        top20,
+        use_container_width=True,
+        height=480,
+        column_config={
+            "country_name":   st.column_config.TextColumn("Country"),
+            "withdrawal_pct": st.column_config.NumberColumn(
+                "Withdrawal %", format="%.1f%%", help="Annual freshwater withdrawal as % of renewable supply"
+            ),
+            "agri_share":     st.column_config.NumberColumn("Agriculture %", format="%.0f%%"),
+            "industry_share": st.column_config.NumberColumn("Industry %",    format="%.0f%%"),
+            "domestic_share": st.column_config.NumberColumn("Municipal %",   format="%.0f%%"),
+            "year":           st.column_config.TextColumn("Data Year"),
+        },
+    )
+
+with tab3:
+    # Fix 10: country comparison
+    col_a, col_b = st.columns(2)
+    with col_a:
+        chosen_a = st.selectbox(
+            "Country A", iso_list,
+            index=iso_list.index(iso_to_name.get(st.session_state.iso, iso_list[0]))
+                  if iso_to_name.get(st.session_state.iso) in iso_list else 0,
+            key="cmp_a",
+        )
+    with col_b:
+        default_b = "CHN" if st.session_state.iso != "CHN" else "USA"
+        default_b_name = iso_to_name.get(default_b, iso_list[1])
+        chosen_b = st.selectbox(
+            "Country B", iso_list,
+            index=iso_list.index(default_b_name) if default_b_name in iso_list else 1,
+            key="cmp_b",
+        )
+
+    iso_a = name_to_iso.get(chosen_a, "IND")
+    iso_b = name_to_iso.get(chosen_b, "CHN")
+
+    rows_a = df[df["iso"] == iso_a]
+    rows_b = df[df["iso"] == iso_b]
+
+    if not rows_a.empty and not rows_b.empty:
+        ra = rows_a.iloc[0]
+        rb = rows_b.iloc[0]
+
+        # Side-by-side metric comparison
+        mc1, mc2 = st.columns(2)
+        for col_widget, r, name in [(mc1, ra, chosen_a), (mc2, rb, chosen_b)]:
+            with col_widget:
+                lbl, fg, bg = stress_band(r.withdrawal_pct)
+                st.markdown(
+                    f'<div class="country-heading" style="font-size:14px">{name}</div>'
+                    f'<div class="stress-badge" style="background:{bg};color:{fg};margin-bottom:12px">'
+                    f'<div class="stress-dot" style="background:{fg}"></div>{lbl}</div>',
+                    unsafe_allow_html=True,
+                )
+                for label, val, unit in [
+                    ("Withdrawal", _fmt(r.withdrawal_pct, 1), "%"),
+                    ("Per Capita", _fmt(r.withdrawal_cap, 0), "m³"),
+                    ("Freshwater", _fmt(r.freshwater_cap, 0), "m³/cap"),
+                    ("Safe Access", _fmt(r.safe_access, 1), "%"),
+                ]:
+                    st.markdown(
+                        f'<div class="metric-label">{label}</div>'
+                        f'<div class="metric-value" style="font-size:16px">'
+                        f'{val}<span class="metric-unit">{unit}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.plotly_chart(
+            make_compare_chart(df, iso_a, iso_b, chosen_a, chosen_b),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    else:
+        st.markdown(
+            '<div style="color:#3a3a52;font-size:13px;padding:24px 0">'
+            'Select two countries to compare.</div>',
+            unsafe_allow_html=True,
+        )
 
 st.markdown("</div>", unsafe_allow_html=True)
