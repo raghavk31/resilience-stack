@@ -6,3 +6,4 @@
 | 01 | Global Grid Stress Map | Live |
 | 02 | Solar Potential Atlas | Live |
 | 03 | Water Stress Index | Live |
+| 04 | Food System Fragility Map | Live |
