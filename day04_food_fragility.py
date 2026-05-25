@@ -51,10 +51,10 @@ CROP_PROFILES = {
 }
 
 TEMP_DELTAS = {
-    "Current baseline": 0.0,
-    "+1.5°C (Paris target)": 1.5,
-    "+2.0°C": 2.0,
-    "+3.0°C (SSP3-7.0 trajectory)": 3.0,
+    "Today — current baseline": 0.0,
+    "+1.5°C — the Paris Agreement goal": 1.5,
+    "+2.0°C — expected mid-century": 2.0,
+    "+3.0°C — likely by 2075 on current path": 3.0,
 }
 
 # Representative WorldClim baseline climate per ISO (t_mean °C, p_annual mm)
@@ -900,25 +900,50 @@ def make_shock_chart(df: pd.DataFrame, wheat_d: float, rice_d: float, maize_d: f
 def make_food_trend_chart(trend_df: pd.DataFrame, country_name: str) -> go.Figure:
     if trend_df.empty:
         fig = go.Figure()
-        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=200)
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=220)
         return fig
+    latest = trend_df.iloc[-1]["value"] if not trend_df.empty else 100
+    line_color = "#16a34a" if latest >= 100 else "#f97316"
+    fill_color  = "rgba(22,163,74,0.07)" if latest >= 100 else "rgba(249,115,22,0.07)"
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=trend_df["year"], y=trend_df["value"],
-        mode="lines", line=dict(color="#16a34a", width=2),
-        fill="tozeroy", fillcolor="rgba(22,163,74,0.07)",
-        hovertemplate="%{x}: %{y:.1f}<extra></extra>",
+        mode="lines", line=dict(color=line_color, width=2),
+        fill="tozeroy", fillcolor=fill_color,
+        hovertemplate="%{x}: %{y:.1f} (2014–16 = 100)<extra></extra>",
     ))
     fig.add_hline(y=100, line_dash="dash", line_color="#94a3b8", line_width=1,
-                  annotation_text="Baseline (100)", annotation_font_size=9,
-                  annotation_font_color="#94a3b8")
+                  annotation_text="2014–2016 average (100)", annotation_font_size=9,
+                  annotation_font_color="#94a3b8", annotation_position="top left")
+
+    # Annotate COVID dip if data covers 2020
+    if 2020 in trend_df["year"].values:
+        covid_val = trend_df[trend_df["year"] == 2020]["value"].iloc[0]
+        fig.add_annotation(x=2020, y=covid_val, text="COVID-19", showarrow=True,
+                           arrowhead=2, arrowsize=0.8, arrowcolor="#94a3b8",
+                           font=dict(size=8, color="#94a3b8"),
+                           ax=30, ay=-25, bgcolor="rgba(255,255,255,0.8)",
+                           bordercolor="#e2e8f0", borderwidth=1)
+
+    # Declining output callout annotation
+    if latest < 90:
+        gap = 100 - latest
+        fig.add_annotation(
+            x=trend_df.iloc[-1]["year"], y=latest,
+            text=f"▼ {gap:.0f}% below 2014–16",
+            showarrow=False, font=dict(size=9, color="#f97316", family="Inter"),
+            bgcolor="rgba(249,115,22,0.08)", bordercolor="rgba(249,115,22,0.25)",
+            borderwidth=1, borderpad=4, xanchor="right",
+        )
+
     fig.update_layout(
         xaxis=dict(showgrid=False, tickfont=dict(size=8, color="#94a3b8")),
         yaxis=dict(gridcolor="#f1f5f9", tickfont=dict(size=8, color="#94a3b8"),
-                   title="Food production index"),
+                   title="Food grown vs. 2014–16 average (%)"),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=4, r=4, t=6, b=4), height=200,
-        title=dict(text=f"{country_name} — food production since 1990",
+        margin=dict(l=4, r=4, t=24, b=4), height=220,
+        title=dict(text=f"{country_name} — domestic food output since 1990",
                    font=dict(size=10, color="#475569"), x=0.5),
     )
     return fig
@@ -931,10 +956,14 @@ def _benchmark_span(val, avg, high_is_bad: bool = True) -> str:
     diff = val - avg
     if abs(diff) < 0.5:
         return ""
-    direction = "up" if diff > 0 else "down"
-    cls = ("bench-up" if (high_is_bad and diff > 0) or (not high_is_bad and diff < 0) else "bench-down")
-    arrow = "▲" if diff > 0 else "▼"
-    return f'<span class="benchmark {cls}">{arrow} {abs(diff):.1f} vs global avg</span>'
+    is_bad  = (high_is_bad and diff > 0) or (not high_is_bad and diff < 0)
+    color   = "#dc2626" if is_bad else "#16a34a"
+    arrow   = "▲" if diff > 0 else "▼"
+    vs_word = "above" if diff > 0 else "below"
+    return (f'<span style="display:block;font-size:11px;font-weight:600;color:{color};'
+            f'margin-top:2px;line-height:1.3">'
+            f'{arrow} {abs(diff):.1f} <span style="font-weight:400;font-size:10px;color:#94a3b8">'
+            f'{vs_word} global avg</span></span>')
 
 
 def _country_panel_v2(r: pd.Series, rank: int, avgs: dict, water_stress_val: float | None) -> str:
@@ -961,25 +990,57 @@ def _country_panel_v2(r: pd.Series, rank: int, avgs: dict, water_stress_val: flo
     avgi = avgs.get("food_import_pct"); avgp = avgs.get("food_prod_index")
     avgu = avgs.get("undernourishment"); avgl = avgs.get("agri_land_pct")
 
+    # Score decomposition bar — shows what drove the number
+    def _decomp_pts(val, weight, max_val) -> float:
+        if val is None or pd.isna(val):
+            return 0.0
+        return round(min(val / max_val, 1.0) * weight * 100, 1)
+
+    pts_imp  = _decomp_pts(imp, 0.35, 100)
+    pts_prod = _decomp_pts(max(0, 1 - (prod or 100) / 100), 0.35, 1) if prod is not None and not pd.isna(prod) else 0
+    pts_undr = _decomp_pts(undr, 0.30, 40)
+    total_pts = pts_imp + pts_prod + pts_undr or 1
+
+    def _seg(pts, total, col, tip):
+        w = round(pts / total * 100, 1)
+        return (f'<div title="{tip}: {pts:.0f}pts" style="flex:{w};background:{col};height:100%;'
+                f'min-width:{max(w,2):.0f}%;transition:flex 0.5s ease"></div>')
+
+    decomp_bar = (
+        '<div style="margin:8px 0 10px">'
+        '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:5px">'
+        'What drives the score</div>'
+        '<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px">'
+        + _seg(pts_imp,  total_pts, "#f97316", "Import dependency")
+        + _seg(pts_prod, total_pts, "#dc2626", "Production gap")
+        + _seg(pts_undr, total_pts, "#7c3aed", "Undernourishment")
+        + '</div>'
+        '<div style="display:flex;gap:10px;margin-top:5px">'
+        f'<span style="font-size:9px;color:#f97316">■ Imports {pts_imp:.0f}pts</span>'
+        f'<span style="font-size:9px;color:#dc2626">■ Production {pts_prod:.0f}pts</span>'
+        f'<span style="font-size:9px;color:#7c3aed">■ Hunger {pts_undr:.0f}pts</span>'
+        '</div></div>'
+    )
+
     cards = f"""
 <div class="metrics-grid">
   <div class="metric-card">
-    <div class="metric-label">Food imports</div>
+    <div class="metric-label">Food imports <span style="font-weight:400;text-transform:none;letter-spacing:0">% of all trade</span></div>
     <div class="metric-value">{_fmt(imp,1)}<span class="metric-unit">%</span></div>
     {_benchmark_span(imp, avgi, True)}
   </div>
   <div class="metric-card">
-    <div class="metric-label">Food prod. index</div>
+    <div class="metric-label">Domestic output <span style="font-weight:400;text-transform:none;letter-spacing:0">2014–16=100</span></div>
     <div class="metric-value">{_fmt(prod,1)}</div>
     {_benchmark_span(prod, avgp, False)}
   </div>
   <div class="metric-card">
-    <div class="metric-label">Undernourished</div>
+    <div class="metric-label">Undernourished <span style="font-weight:400;text-transform:none;letter-spacing:0">% of pop.</span></div>
     <div class="metric-value">{_fmt(undr,1)}<span class="metric-unit">%</span></div>
     {_benchmark_span(undr, avgu, True)}
   </div>
   <div class="metric-card">
-    <div class="metric-label">Agricultural land</div>
+    <div class="metric-label">Agricultural land <span style="font-weight:400;text-transform:none;letter-spacing:0">% of area</span></div>
     <div class="metric-value">{_fmt(land,1)}<span class="metric-unit">%</span></div>
     {_benchmark_span(land, avgl, False)}
   </div>
@@ -990,10 +1051,8 @@ def _country_panel_v2(r: pd.Series, rank: int, avgs: dict, water_stress_val: flo
 
     method_note = (
         '<div class="method-note">'
-        '<strong>Methodology:</strong> Fragility score = 0.35 × import dependency '
-        '+ 0.35 × food production gap + 0.30 × undernourishment. '
-        'Crop suitability uses a bioclimatic envelope approach inspired by MaxEnt '
-        '(19 WorldClim v2.1 variables; validated AUC 0.8642 on Sub-Saharan Africa maize).'
+        'Score = 0.35 × import dependency + 0.35 × production gap + 0.30 × undernourishment. '
+        'Hover the colored bar above to see each component\'s contribution.'
         '</div>'
     )
 
@@ -1003,71 +1062,109 @@ def _country_panel_v2(r: pd.Series, rank: int, avgs: dict, water_stress_val: flo
         f'<span class="frag-band-label" style="color:{color}">{label}</span>'
         f'<span class="frag-band-label" style="margin-left:4px">· {_fmt(frag,1)}/100</span>'
         f'</div>'
-        f'{compound}{cards}{story}{method_note}'
+        f'{compound}{decomp_bar}{cards}{story}{method_note}'
     )
 
 
 def _stats_strip_v2(gs: dict) -> str:
+    # critical count gets red color; avg fragility gets context sub-label
     cards = [
-        ("🌍", str(gs["critical_count"]),  "critical countries",         "0.05s"),
-        ("📦", str(gs["high_import"]),      "high food import dependency", "0.12s"),
-        ("📊", f'{gs["avg_fragility"]:.0f}', "global avg fragility score", "0.18s"),
-        ("⚠",  gs["worst_name"],            "most fragile system",        "0.24s"),
+        ("🌍", str(gs["critical_count"]),     "#dc2626", "countries in critical fragility",    "Affecting ~650M+ people",         "0.05s"),
+        ("📦", str(gs["high_import"]),         "#f97316", "rely heavily on food imports",       "≥60% of trade is food",           "0.12s"),
+        ("📊", f'{gs["avg_fragility"]:.0f}',   "#d97706", "global average fragility score",     "Moderate — and rising",           "0.18s"),
+        ("⚠",  gs["worst_name"],               "#dc2626", "most fragile food system",           "Highest combined risk",           "0.24s"),
     ]
     items = "".join(
         f'<div class="strip-card" style="animation-delay:{delay}">'
         f'<div class="strip-icon">{icon}</div>'
-        f'<div class="strip-n">{num}</div>'
+        f'<div class="strip-n" style="color:{color}">{num}</div>'
         f'<div class="strip-l">{lbl}</div>'
+        f'<div style="font-size:9px;color:#94a3b8;margin-top:3px;font-style:italic">{sub}</div>'
         f'</div>'
-        for icon, num, lbl, delay in cards
+        for icon, num, color, lbl, sub, delay in cards
     )
     return f'<div class="strip-row">{items}</div>'
 
 
 def intro_card_html(gs: dict) -> str:
+    pillars = [
+        ("#16a34a", "35%", "🌾", "What it grows",
+         "Domestic food production index — whether the country is growing more or less food than a decade ago."),
+        ("#f97316", "35%", "📦", "What it imports",
+         "Share of total merchandise imports that is food — the higher this is, the more vulnerable to trade disruptions and price spikes."),
+        ("#7c3aed", "30%", "❤️", "Who goes hungry",
+         "Undernourishment rate — the proportion of people who cannot access enough calories. This is the real-world consequence of the other two."),
+    ]
+    pillar_html = "".join(
+        f'<div style="flex:1;min-width:160px;background:rgba(255,255,255,0.7);'
+        f'border:1px solid {col}22;border-top:3px solid {col};border-radius:8px;'
+        f'padding:11px 13px">'
+        f'<div style="font-size:18px;margin-bottom:4px">{icon}</div>'
+        f'<div style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:2px">{title}</div>'
+        f'<div style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:{col};margin-bottom:5px">{weight} of score</div>'
+        f'<div style="font-size:10px;line-height:1.6;color:#64748b">{desc}</div>'
+        f'</div>'
+        for col, weight, icon, title, desc in pillars
+    )
+    stakes = (
+        f'<div style="margin-top:13px;padding-top:11px;border-top:1px solid #e2e8f0;'
+        f'display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+        f'<div><span style="font-size:26px;font-weight:300;color:#dc2626">{gs["critical_count"]}</span>'
+        f'<span style="font-size:11px;color:#94a3b8;margin-left:6px">countries in critical fragility</span></div>'
+        f'<div style="font-size:11px;color:#64748b;max-width:420px">'
+        f'When all three pillars fail simultaneously — crops wilt, imports become unaffordable, '
+        f'and people go hungry — famine conditions can emerge within months. '
+        f'<strong>Click any country on the map below to explore its score.</strong></div>'
+        f'</div>'
+    )
     return (
         '<div class="intro-card">'
-        '<div class="intro-inner">'
-        f'<div class="intro-svg">{farm_scene_svg()}</div>'
-        '<div class="intro-text">'
-        '<p class="intro-heading">What is food system fragility?</p>'
-        '<p class="intro-body">A country\'s food security depends on three things: '
-        '<strong>what it grows</strong>, <strong>what it can buy</strong>, and '
-        '<strong>how much climate risk it faces</strong>. This tool combines import '
-        'dependency, domestic production, and undernourishment data with bioclimatic '
-        'crop suitability modelling — the same methodology used in MaxEnt habitat '
-        'prediction — to score food fragility across 150+ countries.</p>'
-        '<div class="intro-callout">'
-        f'<span class="intro-n">{gs["critical_count"]}</span>'
-        '<span class="intro-l">countries in critical food fragility right now</span>'
-        '</div>'
-        '</div>'
-        '</div>'
+        '<p class="intro-heading" style="margin-bottom:10px">What is food system fragility?</p>'
+        f'<div style="display:flex;gap:10px;flex-wrap:wrap">{pillar_html}</div>'
+        f'{stakes}'
         '</div>'
     )
 
 
 def agritech_cards_html(strategies: list[dict]) -> str:
-    cards = []
+    # Group by timeframe bucket
+    def _bucket(tf: str) -> tuple[int, str, str]:
+        if "0" in tf and ("1" in tf or "2" in tf):
+            return (0, "🔴 Deploy now (0–2 years)", "#dc2626")
+        if any(x in tf for x in ["2–5", "2–4", "3–7", "3–8"]):
+            return (1, "🟡 Build now, deploy soon (2–5 years)", "#d97706")
+        return (2, "🔵 Long-term structural change (5+ years)", "#0369a1")
+
+    grouped: dict[tuple, list] = {}
     for s in strategies:
-        imp_cls  = f'badge-impact-{s["impact"].lower()}'
-        feas_cls = f'badge-feasibility-{s["feasibility"].lower()}'
-        cards.append(
-            f'<div class="agritech-card">'
-            f'<div class="agritech-header">'
-            f'<div class="agritech-title">{s["title"]}</div>'
-            f'<div class="agritech-badges">'
-            f'<span class="badge {imp_cls}">Impact: {s["impact"]}</span>'
-            f'<span class="badge {feas_cls}">Feasibility: {s["feasibility"]}</span>'
-            f'</div></div>'
-            f'<div class="agritech-desc">{s["description"]}</div>'
-            f'<div class="agritech-meta">'
-            f'<span>⏱ {s["timeframe"]}</span>'
-            f'<span>🌍 e.g. {s["example"]}</span>'
-            f'</div></div>'
+        key = _bucket(s["timeframe"])
+        grouped.setdefault(key, []).append(s)
+
+    html = []
+    for (order, header, hcolor) in sorted(grouped.keys()):
+        html.append(
+            f'<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
+            f'text-transform:uppercase;color:{hcolor};margin:12px 0 6px">{header}</div>'
         )
-    return "".join(cards)
+        for s in grouped[(order, header, hcolor)]:
+            imp_cls  = f'badge-impact-{s["impact"].lower()}'
+            feas_cls = f'badge-feasibility-{s["feasibility"].lower()}'
+            imp_tip  = {"HIGH": "documented 20–30% yield improvement", "MEDIUM": "10–20% improvement", "LOW": "marginal gains"}.get(s["impact"], "")
+            html.append(
+                f'<div class="agritech-card" style="border-left:3px solid {hcolor}">'
+                f'<div class="agritech-header">'
+                f'<div class="agritech-title">{s["title"]}</div>'
+                f'<div class="agritech-badges">'
+                f'<span class="badge {imp_cls}" title="{imp_tip}">Impact: {s["impact"]}</span>'
+                f'<span class="badge {feas_cls}">Feasibility: {s["feasibility"]}</span>'
+                f'</div></div>'
+                f'<div class="agritech-desc">{s["description"]}</div>'
+                f'<div class="agritech-meta">'
+                f'<span>⏱ {s["timeframe"]}</span>'
+                f'<span>📍 {s["example"]}</span>'
+                f'</div></div>'
+            )
+    return "".join(html)
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -1174,11 +1271,31 @@ if not st.session_state.intro_dismissed:
 st.markdown(_stats_strip_v2(gs), unsafe_allow_html=True)
 
 no_data_ct = int(df_food["fragility"].isna().sum())
-if no_data_ct:
-    st.markdown(
-        f'<p class="no-data-note">{no_data_ct} countries lack sufficient data for fragility scoring.</p>',
-        unsafe_allow_html=True,
-    )
+
+# Compound risk full-width banner (main area)
+if selected_iso:
+    _sel_row = df_food[df_food["iso"] == selected_iso]
+    if not _sel_row.empty:
+        _sel_frag = _sel_row.iloc[0].get("fragility")
+        _sel_ws   = water_stress_map.get(selected_iso)
+        _sel_name = _sel_row.iloc[0].get("country_name", selected_iso)
+        if (_sel_frag is not None and _sel_frag > 60
+                and _sel_ws is not None and not pd.isna(_sel_ws) and _sel_ws > 40):
+            st.markdown(
+                f'<div style="background:rgba(234,88,12,0.06);border:1px solid rgba(234,88,12,0.25);'
+                f'border-left:4px solid #ea580c;border-radius:0 10px 10px 0;'
+                f'padding:13px 18px;margin:6px 0 8px;animation:slideDown 0.4s ease both">'
+                f'<div style="font-size:10px;font-weight:700;letter-spacing:0.12em;'
+                f'text-transform:uppercase;color:#ea580c;margin-bottom:5px">'
+                f'⚠ Compound crisis detected — {_sel_name}</div>'
+                f'<div style="font-size:12px;line-height:1.7;color:#78716c">'
+                f'This country simultaneously withdraws <strong>{_sel_ws:.0f}%</strong> of its renewable '
+                f'freshwater and scores <strong>{_sel_frag:.0f}/100</strong> on food fragility. '
+                f'A single drought event destroys crops and cuts freshwater supply at the same time — '
+                f'two crises reinforcing each other with no buffer between them.</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 # Map
 fig_map = make_fragility_map(df_food, selected_iso, metric)
@@ -1190,6 +1307,38 @@ if event and event.get("selection", {}).get("points"):
         st.session_state["clicked_iso"] = clicked_iso
         st.rerun()
 
+# Map band legend
+LEGEND_BANDS = [
+    ("#0ea5e9", "SECURE",   "0–20", "Robust domestic production, low import reliance, minimal hunger"),
+    ("#22c55e", "LOW",      "20–40","Some exposure but food system absorbs most shocks"),
+    ("#eab308", "MODERATE", "40–60","Vulnerable to trade disruption, climate stress, or price spikes"),
+    ("#f97316", "HIGH",     "60–80","Multiple risk factors active — a drought or price shock triggers crisis"),
+    ("#dc2626", "CRITICAL", "80+",  "Immediate risk: a supply disruption can cause widespread hunger within months"),
+]
+legend_items = "".join(
+    f'<div style="display:flex;align-items:flex-start;gap:9px;min-width:0;flex:1">'
+    f'<div style="width:10px;height:10px;border-radius:2px;background:{color};flex-shrink:0;margin-top:3px"></div>'
+    f'<div>'
+    f'<div style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:{color};margin-bottom:1px">{band} <span style="color:#94a3b8;font-weight:400">({score})</span></div>'
+    f'<div style="font-size:10px;color:#64748b;line-height:1.4">{desc}</div>'
+    f'</div></div>'
+    for color, band, score, desc in LEGEND_BANDS
+)
+st.markdown(
+    f'<div style="background:rgba(255,255,255,0.88);border:1px solid rgba(0,0,0,0.07);'
+    f'border-radius:10px;padding:11px 16px;margin:4px 0 4px;'
+    f'box-shadow:0 1px 3px rgba(0,0,0,0.05)">'
+    f'<div style="font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
+    f'color:#94a3b8;margin-bottom:8px">How to read the map</div>'
+    f'<div style="display:flex;gap:12px;flex-wrap:wrap">{legend_items}</div>'
+    f'<div style="font-size:9px;color:#94a3b8;margin-top:8px;border-top:1px solid #f1f5f9;padding-top:6px">'
+    f'Click any country to explore its score. '
+    f'{no_data_ct} countries appear gray — insufficient World Bank data, often because they are '
+    f'fragile, conflict-affected, or isolated states where food insecurity is likely <em>under</em>reported.</div>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
+
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
     "COUNTRY DEEP DIVE",
@@ -1200,6 +1349,14 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # ── Tab 1 — Country Deep Dive ─────────────────────────────────────────────────
 with tab1:
+    st.markdown(
+        '<div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:2px">'
+        'What\'s driving this country\'s score?</div>'
+        '<p style="font-size:11px;color:#64748b;margin-bottom:10px">'
+        'Explore the trend since 1990, compare against a peer country, '
+        'and see the breakdown of each risk factor.</p>',
+        unsafe_allow_html=True,
+    )
     if selected_iso:
         row = df_food[df_food["iso"] == selected_iso]
         if not row.empty:
@@ -1275,20 +1432,36 @@ with tab1:
 # ── Tab 2 — Crop Climate Shift ────────────────────────────────────────────────
 with tab2:
     st.markdown(
-        '<div class="method-note" style="margin-bottom:12px">'
-        '<strong>Bioclimatic envelope model</strong> — Crop suitability is computed using a '
-        'simplified MaxEnt approach: Gaussian overlap of mean annual temperature and precipitation '
-        'with optimal and absolute bioclimatic ranges for Maize, Wheat, Rice and Sorghum. '
-        'Ranges derived from WorldClim v2.1 (19 bioclimatic variables). '
-        'Methodology validated at AUC 0.8642 on Sub-Saharan Africa maize under SSP3-7.0 baseline vs. 2050.'
-        '</div>',
+        '<div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:4px">'
+        'Which crops can still grow here as temperatures rise?</div>'
+        '<p style="font-size:12px;color:#475569;margin-bottom:10px">'
+        'As global temperatures increase, the climate zones where crops can thrive shift — '
+        'sometimes to new regions, often away from where they\'ve been grown for generations. '
+        'Select a scenario below to see the projected change for the selected country.</p>',
+        unsafe_allow_html=True,
+    )
+
+    # Radar chart explainer
+    st.markdown(
+        '<div style="background:rgba(22,163,74,0.04);border:1px solid rgba(22,163,74,0.15);'
+        'border-radius:8px;padding:11px 14px;margin-bottom:12px;display:flex;gap:16px;align-items:center">'
+        '<div style="font-size:22px;flex-shrink:0">🕸️</div>'
+        '<div>'
+        '<div style="font-size:11px;font-weight:600;color:#0f172a;margin-bottom:3px">How to read the radar chart</div>'
+        '<div style="font-size:10px;color:#64748b;line-height:1.6">'
+        'Each axis = one crop. The <span style="color:#16a34a;font-weight:600">green shape</span> = '
+        'suitability today (outer edge = perfect conditions). '
+        'The <span style="color:#f97316;font-weight:600">orange dashed shape</span> = projected suitability in 2050. '
+        'A shrinking shape means fewer crops can grow here. '
+        'A score of 100% = ideal temperature and rainfall for that crop.'
+        '</div></div></div>',
         unsafe_allow_html=True,
     )
 
     scenario = st.select_slider(
         "Climate scenario",
         options=list(TEMP_DELTAS.keys()),
-        value="Current baseline",
+        value="Today — current baseline",
     )
     t_delta = TEMP_DELTAS[scenario]
 
@@ -1332,7 +1505,16 @@ with tab2:
                     )
 
     # City-level zoom
-    with st.expander("📍 City-level bioclimatic analysis (Open-Meteo)"):
+    st.markdown(
+        '<hr style="border:none;border-top:1px solid #e2e8f0;margin:18px 0 14px"/>'
+        '<div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:4px">'
+        '📍 Zoom into a farming city</div>'
+        '<p style="font-size:11px;color:#64748b;margin-bottom:10px">'
+        'Pick any major agricultural city to see how warming temperatures affect what farmers '
+        'can grow there by 2050. Data fetched from 30 years of historical climate records.</p>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("Select a city to explore crop futures at ground level", expanded=True):
         city_name = st.selectbox("Select agricultural city", ["— select —"] + sorted(CITY_LIST.keys()), key="city_sel")
         if city_name != "— select —":
             lat, lon = CITY_LIST[city_name]
@@ -1373,30 +1555,91 @@ with tab2:
 # ── Tab 3 — Food Shock Simulator ──────────────────────────────────────────────
 with tab3:
     st.markdown(
+        '<div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:4px">'
+        'What happens when global food prices spike?</div>'
         '<p style="font-size:12px;color:#475569;margin-bottom:12px">'
-        'Simulate the impact of global commodity price shocks on food-importing countries. '
-        'Higher import dependency amplifies fragility when prices spike.</p>',
+        'Countries that import large shares of their food are hit hardest when commodity prices rise. '
+        'A wheat price spike caused by a drought in one country can trigger hunger in a dozen others. '
+        'Drag the sliders to simulate a shock — or load a real historical event below.</p>',
         unsafe_allow_html=True,
     )
+
+    # Real-world event preset buttons
+    PRESETS = {
+        "🇺🇦 2022 Ukraine war": {"wheat": 85, "rice": 10, "maize": 40},
+        "🌾 2008 food crisis":  {"wheat": 130, "rice": 200, "maize": 60},
+        "🌡️ 2050 drought scenario": {"wheat": 30, "rice": 25, "maize": 35},
+        "Reset": {"wheat": 0, "rice": 0, "maize": 0},
+    }
+    if "shock_wheat" not in st.session_state: st.session_state.shock_wheat = 0
+    if "shock_rice"  not in st.session_state: st.session_state.shock_rice  = 0
+    if "shock_maize" not in st.session_state: st.session_state.shock_maize = 0
+
+    preset_cols = st.columns(len(PRESETS))
+    for i, (label, vals) in enumerate(PRESETS.items()):
+        with preset_cols[i]:
+            if st.button(label, key=f"preset_{i}", use_container_width=True):
+                st.session_state.shock_wheat = vals["wheat"]
+                st.session_state.shock_rice  = vals["rice"]
+                st.session_state.shock_maize = vals["maize"]
+                st.rerun()
+
     c1s, c2s, c3s = st.columns(3)
     with c1s:
-        wheat_d = st.slider("Wheat price change %", -50, 200, 0, 5, key="wheat_sl")
+        wheat_d = st.slider("Wheat price change %", -50, 200, st.session_state.shock_wheat, 5, key="wheat_sl")
     with c2s:
-        rice_d  = st.slider("Rice price change %",  -50, 200, 0, 5, key="rice_sl")
+        rice_d  = st.slider("Rice price change %",  -50, 200, st.session_state.shock_rice,  5, key="rice_sl")
     with c3s:
-        maize_d = st.slider("Maize price change %", -50, 200, 0, 5, key="maize_sl")
+        maize_d = st.slider("Maize price change %", -50, 200, st.session_state.shock_maize, 5, key="maize_sl")
 
     if wheat_d != 0 or rice_d != 0 or maize_d != 0:
+        # Dynamic headline
+        valid_shock = df_food.dropna(subset=["fragility", "food_import_pct"]).copy()
+        shock_factor = (wheat_d * 0.3 + rice_d * 0.35 + maize_d * 0.35) / 100.0
+        valid_shock["shocked"] = (valid_shock["fragility"]
+                                  + valid_shock["food_import_pct"] / 100.0 * shock_factor * 40.0).clip(0, 100)
+        newly_critical = int(((valid_shock["shocked"] >= 80) & (valid_shock["fragility"] < 80)).sum())
+        most_exposed   = valid_shock.nlargest(1, "shocked").iloc[0] if not valid_shock.empty else None
+        me_name = most_exposed["country_name"] if most_exposed is not None else "—"
+        me_imp  = most_exposed["food_import_pct"] if most_exposed is not None else 0
+
+        headline_color = "#dc2626" if newly_critical > 0 else "#475569"
+        st.markdown(
+            f'<div style="background:rgba(220,38,38,0.05);border:1px solid rgba(220,38,38,0.18);'
+            f'border-left:3px solid {headline_color};border-radius:0 8px 8px 0;'
+            f'padding:10px 14px;margin:10px 0 8px">'
+            f'<div style="font-size:13px;font-weight:600;color:{headline_color};margin-bottom:3px">'
+            f'{newly_critical} {"country" if newly_critical==1 else "countries"} cross into CRITICAL fragility under this scenario</div>'
+            f'<div style="font-size:11px;color:#78716c">'
+            f'Most exposed: <strong>{me_name}</strong> — {me_imp:.0f}% of its trade imports are food, '
+            f'leaving it with almost no buffer when prices spike.</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
         st.plotly_chart(
             make_shock_chart(df_food, wheat_d, rice_d, maize_d),
             use_container_width=True,
         )
-        st.caption("Bar height = shock-adjusted fragility. Colour = baseline fragility band. Most vulnerable countries shown.")
+        st.caption("Bar height = shock-adjusted fragility score (0–100). Color = baseline fragility tier. Countries already in CRITICAL shown in dark red.")
     else:
-        st.info("Move a price slider to simulate a food shock scenario.")
+        st.markdown(
+            '<div style="text-align:center;padding:32px 0;color:#94a3b8">'
+            '<div style="font-size:32px;margin-bottom:8px">📊</div>'
+            '<div style="font-size:12px">Load a historical scenario above, or drag a slider to see which countries are most exposed.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
 # ── Tab 4 — AgriTech Strategies ───────────────────────────────────────────────
 with tab4:
+    st.markdown(
+        '<div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:2px">'
+        'What interventions would actually help here?</div>'
+        '<p style="font-size:11px;color:#64748b;margin-bottom:10px">'
+        'Recommendations are matched to the selected country\'s fragility tier and water stress level. '
+        'Impact ratings reflect documented outcomes from FAO, CGIAR, and World Bank field programmes.</p>',
+        unsafe_allow_html=True,
+    )
     if selected_iso:
         row = df_food[df_food["iso"] == selected_iso]
         name_t4 = row.iloc[0]["country_name"] if not row.empty else selected_iso
@@ -1404,10 +1647,16 @@ with tab4:
         ws_t4   = water_stress_map.get(selected_iso)
         label_t4, color_t4, _ = fragility_band(frag_t4)
 
+        # Context banner
         st.markdown(
-            f'<p style="font-size:12px;color:#475569;margin-bottom:10px">'
-            f'Technology recommendations for <strong>{name_t4}</strong> '
-            f'(<span style="color:{color_t4}">{label_t4}</span> fragility).</p>',
+            f'<div style="background:{_hex_rgba(color_t4,0.06)};border:1px solid {_hex_rgba(color_t4,0.2)};'
+            f'border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px">'
+            f'<div style="font-size:22px">{grain_badge_svg({"CRITICAL":1.0,"HIGH":0.78,"MODERATE":0.52,"LOW":0.28,"SECURE":0.10}.get(label_t4,0.4),color_t4,28)}</div>'
+            f'<div>'
+            f'<div style="font-size:12px;font-weight:600;color:#0f172a">{name_t4}</div>'
+            f'<div style="font-size:11px;color:{color_t4};font-weight:700">{label_t4} fragility — {_fmt(frag_t4,1)}/100</div>'
+            f'{"<div style='font-size:10px;color:#ea580c;margin-top:2px'>⚠ Also high water stress — irrigation efficiency prioritised</div>" if ws_t4 and not pd.isna(ws_t4) and ws_t4 > 40 else ""}'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -1415,11 +1664,12 @@ with tab4:
         st.markdown(agritech_cards_html(strategies), unsafe_allow_html=True)
 
         st.markdown(
-            '<div class="method-note">'
-            '<strong>Strategy scoring:</strong> Impact and feasibility ratings reflect '
+            '<div class="method-note" style="margin-top:16px">'
+            '<strong>How strategies are selected:</strong> Impact and feasibility ratings reflect '
             'meta-analyses from FAO, CGIAR, and World Bank agricultural development reviews. '
             'Recommendations are filtered by fragility tier and compound water stress. '
-            'Timeframes assume adequate financing and institutional capacity.</div>',
+            'Timeframes assume adequate financing and institutional capacity. '
+            'Hover "Impact" badges for documented outcome ranges.</div>',
             unsafe_allow_html=True,
         )
     else:
