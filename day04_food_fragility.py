@@ -497,6 +497,69 @@ div[data-baseweb="select"] > div {
   0%   { background-position: -200% center; }
   100% { background-position: 200% center; }
 }
+
+/* ── Mobile responsiveness ── */
+@media (max-width: 768px) {
+  /* Reduce outer padding */
+  .main .block-container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    padding-top: 12px !important;
+  }
+
+  /* Stats strip: 4-col → 2×2 grid */
+  .strip-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .strip-card { min-width: unset !important; }
+
+  /* Intro pillars stack */
+  .intro-pillars { flex-direction: column !important; gap: 8px !important; }
+  .intro-pillar  { min-width: unset !important; }
+
+  /* Fragility map: taller touch target on mobile */
+  [data-testid="stPlotlyChart"] iframe,
+  [data-testid="stPlotlyChart"] > div { min-height: 320px !important; }
+  .js-plotly-plot .plotly { min-height: 320px !important; }
+
+  /* Country panel metrics: 2-col grid */
+  .metric-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Tab buttons: slightly larger touch area */
+  button[data-baseweb="tab"] {
+    padding: 10px 8px !important;
+    font-size: 10px !important;
+  }
+
+  /* Typography floor */
+  .strip-label { font-size: 9px !important; }
+  .strip-value { font-size: 20px !important; }
+  .section-header { font-size: 13px !important; }
+  .narrative-bar  { font-size: 11px !important; }
+
+  /* Compound risk banner: full readable size */
+  .compound-risk { font-size: 12px !important; padding: 12px !important; }
+
+  /* Agritech cards: full-width stack */
+  .agritech-card { width: 100% !important; min-width: unset !important; }
+
+  /* Preset buttons: handled in Python (2×2) */
+}
+
+@media (max-width: 480px) {
+  /* Sidebar country panel: tighter */
+  .dramatic-fact { font-size: 11px !important; padding: 10px 12px !important; }
+  .decomp-bar    { height: 10px !important; }
+
+  /* Map shrinks to fit portrait phone */
+  [data-testid="stPlotlyChart"] > div { min-height: 260px !important; }
+}
 </style>
 """
 
@@ -1779,14 +1842,17 @@ with tab3:
     if "shock_rice"  not in st.session_state: st.session_state.shock_rice  = 0
     if "shock_maize" not in st.session_state: st.session_state.shock_maize = 0
 
-    preset_cols = st.columns(len(PRESETS))
-    for i, (label, vals) in enumerate(PRESETS.items()):
-        with preset_cols[i]:
-            if st.button(label, key=f"preset_{i}", use_container_width=True):
-                st.session_state.shock_wheat = vals["wheat"]
-                st.session_state.shock_rice  = vals["rice"]
-                st.session_state.shock_maize = vals["maize"]
-                st.rerun()
+    preset_items = list(PRESETS.items())
+    for row_start in range(0, len(preset_items), 2):
+        preset_cols = st.columns(2)
+        for col_idx, (label, vals) in enumerate(preset_items[row_start:row_start + 2]):
+            i = row_start + col_idx
+            with preset_cols[col_idx]:
+                if st.button(label, key=f"preset_{i}", use_container_width=True):
+                    st.session_state.shock_wheat = vals["wheat"]
+                    st.session_state.shock_rice  = vals["rice"]
+                    st.session_state.shock_maize = vals["maize"]
+                    st.rerun()
 
     c1s, c2s, c3s = st.columns(3)
     with c1s:
