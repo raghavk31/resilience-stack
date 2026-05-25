@@ -195,47 +195,58 @@ CITY_LIST = {
 # ── CSS ────────────────────────────────────────────────────────────────────────
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
 :root {
-  --bg:       #f5f7fa;
+  --bg:       #eef2f7;
   --surface:  #ffffff;
-  --glass:    rgba(255,255,255,0.82);
-  --glass-b:  rgba(0,0,0,0.07);
+  --glass:    rgba(255,255,255,0.72);
+  --glass-b:  rgba(255,255,255,0.55);
+  --glass-bd: rgba(0,0,0,0.06);
   --text-1:   #0f172a;
   --text-2:   #475569;
   --text-3:   #94a3b8;
   --accent:   #16a34a;
   --accent-2: #f59e0b;
-  --sh-sm:    0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
-  --sh-md:    0 4px 16px rgba(0,0,0,0.08);
-  --r:        10px;
+  --sh-xs:    0 1px 2px rgba(0,0,0,0.04);
+  --sh-sm:    0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.7);
+  --sh-md:    0 8px 32px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.7);
+  --sh-lg:    0 16px 48px rgba(0,0,0,0.11), 0 4px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
+  --r:        12px;
+  --r-sm:     8px;
 }
 
+/* ── Page background — layered gradient for depth ── */
 body,
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"] {
-  background: var(--bg) !important;
+  background:
+    radial-gradient(ellipse at 10% 20%,  rgba(22,163,74,0.06)  0%, transparent 55%),
+    radial-gradient(ellipse at 90% 80%,  rgba(14,165,233,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 50%,  rgba(245,158,11,0.03) 0%, transparent 70%),
+    linear-gradient(160deg, #eef2f7 0%, #f1f5f9 40%, #eef4f2 100%) !important;
+  background-attachment: fixed !important;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
   color: var(--text-2) !important;
 }
 .main .block-container {
-  padding-top: 8px !important;
-  padding-bottom: 12px !important;
+  padding-top: 10px !important;
+  padding-bottom: 16px !important;
   max-width: 100% !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 #MainMenu, footer,
 [data-testid="stToolbar"],
 [data-testid="stDecoration"] { display: none !important; }
 
+/* ── Sidebar — deep frosted glass ── */
 [data-testid="stSidebar"] {
-  background: var(--glass) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-right: 1px solid var(--glass-b) !important;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.05) !important;
+  background: rgba(248,250,252,0.78) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border-right: 1px solid rgba(255,255,255,0.6) !important;
+  box-shadow: 4px 0 32px rgba(0,0,0,0.07), inset -1px 0 0 rgba(255,255,255,0.5) !important;
 }
 [data-testid="stSidebar"] > div:first-child { padding: 22px 18px 28px !important; }
 [data-testid="stSidebar"] label,
@@ -246,148 +257,227 @@ body,
 }
 [data-testid="stSidebar"] [data-baseweb="select"] > div,
 [data-testid="stSidebar"] [data-baseweb="select"] input {
-  background: rgba(255,255,255,0.95) !important;
-  border-color: #e2e8f0 !important; color: var(--text-1) !important;
+  background: rgba(255,255,255,0.9) !important;
+  border-color: rgba(0,0,0,0.08) !important; color: var(--text-1) !important;
 }
 
-/* Metrics grid */
+/* ── Metrics grid ── */
 .metrics-grid {
   display: grid; grid-template-columns: 1fr 1fr;
   gap: 8px; margin: 10px 0;
 }
 .metric-card {
-  background: var(--surface); border: 1px solid var(--glass-b);
-  border-radius: 8px; padding: 10px 11px; box-shadow: var(--sh-sm);
+  background: rgba(255,255,255,0.80);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.7);
+  border-radius: var(--r-sm); padding: 10px 11px;
+  box-shadow: var(--sh-sm);
   animation: fadeSlideUp 0.3s ease both;
 }
 .metric-label {
-  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-3); margin-bottom: 3px;
 }
 .metric-value { font-size: 18px; font-weight: 600; color: var(--text-1); line-height: 1.15; font-variant-numeric: tabular-nums; }
 .metric-unit  { font-size: 10px; color: var(--text-3); font-weight: 400; margin-left: 2px; }
 
-/* Country heading & grain badge */
-.country-heading { font-size: 17px; font-weight: 600; color: var(--text-1); letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 6px; }
+/* ── Country heading & grain badge ── */
+.country-heading { font-size: 17px; font-weight: 600; color: var(--text-1); letter-spacing: -0.02em; line-height: 1.25; margin-bottom: 6px; }
 .grain-badge { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; }
 .frag-band-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); }
 
-/* Story card */
+/* ── Story card ── */
 .story-card {
-  font-size: 12px; line-height: 1.8; color: var(--text-2); margin-bottom: 10px;
-  background: var(--surface); border: 1px solid var(--glass-b);
-  border-radius: 8px; padding: 10px 12px;
-  animation: fadeSlideUp 0.35s 0.08s ease both; box-shadow: var(--sh-sm);
+  font-size: 12px; line-height: 1.85; color: var(--text-2); margin-bottom: 10px;
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.65);
+  border-radius: var(--r-sm); padding: 12px 14px;
+  box-shadow: var(--sh-sm);
+  animation: fadeSlideUp 0.35s 0.08s ease both;
 }
 
-/* Compound risk callout */
+/* ── Dramatic fact callout ── */
+.dramatic-fact {
+  background: linear-gradient(135deg, rgba(15,23,42,0.03) 0%, rgba(255,255,255,0.6) 100%);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.65);
+  border-left: 3px solid var(--accent-color, #16a34a);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  padding: 11px 13px; margin: 0 0 10px;
+  box-shadow: var(--sh-sm);
+  font-size: 11px; line-height: 1.75; color: #374151;
+  animation: fadeSlideUp 0.4s 0.05s ease both;
+}
+
+/* ── Compound risk callout ── */
 .compound-risk {
-  border: 1px solid rgba(234,88,12,0.30); border-left: 3px solid #ea580c;
-  background: rgba(234,88,12,0.04); border-radius: 0 8px 8px 0;
+  border: 1px solid rgba(234,88,12,0.28); border-left: 3px solid #ea580c;
+  background: rgba(254,243,199,0.35);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   padding: 11px 13px; margin: 0 0 10px;
   animation: shake 0.45s ease both;
+  box-shadow: 0 2px 8px rgba(234,88,12,0.08);
 }
 .compound-risk-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #ea580c; margin-bottom: 5px; }
 .compound-risk-body  { font-size: 11px; line-height: 1.75; color: #78716c; }
 
-/* Stats strip */
-.strip-row { display: flex; gap: 8px; margin: 4px 0 6px; padding: 0 2px; }
+/* ── Stats strip ── */
+.strip-row { display: flex; gap: 10px; margin: 4px 0 8px; padding: 0 1px; }
 .strip-card {
-  flex: 1; min-width: 0; background: var(--glass); border: 1px solid var(--glass-b);
-  border-radius: var(--r); padding: 11px 13px; box-shadow: var(--sh-sm);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  flex: 1; min-width: 0;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.65);
+  border-radius: var(--r); padding: 13px 15px;
+  box-shadow: var(--sh-sm);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
   animation: fadeSlideUp 0.4s ease both; cursor: default;
 }
-.strip-card:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
-.strip-icon { margin-bottom: 5px; }
-.strip-n { font-size: 21px; font-weight: 300; font-family: 'Inter', sans-serif; color: var(--accent); line-height: 1.1; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip-card:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
+.strip-icon { margin-bottom: 6px; font-size: 16px; }
+.strip-n {
+  font-size: 22px; font-weight: 300; font-family: 'Inter', sans-serif;
+  line-height: 1.1; margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .strip-l { font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); line-height: 1.4; }
 
-/* Intro card */
-.intro-card {
-  background: rgba(255,255,255,0.92); backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(22,163,74,0.18); border-radius: var(--r);
-  padding: 16px 20px; margin: 4px 0 10px;
-  animation: slideDown 0.4s ease both; box-shadow: 0 2px 14px rgba(22,163,74,0.07);
+/* ── Narrative bar — global context strip ── */
+.narrative-bar {
+  background: rgba(255,255,255,0.68);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: var(--r); padding: 14px 18px;
+  margin: 6px 0 8px;
+  box-shadow: var(--sh-sm);
+  animation: slideDown 0.4s 0.1s ease both;
 }
-.intro-inner { display: flex; align-items: center; gap: 18px; }
-.intro-text  { flex: 1; }
-.intro-heading { font-size: 14px; font-weight: 600; color: var(--text-1); margin: 0 0 5px; }
-.intro-body    { font-size: 12px; line-height: 1.7; color: var(--text-2); margin: 0 0 10px; }
-.intro-callout { display: flex; align-items: baseline; gap: 7px; }
-.intro-n { font-size: 22px; font-weight: 600; color: #dc2626; }
-.intro-l { font-size: 11px; color: var(--text-3); }
-.intro-svg { flex-shrink: 0; opacity: 0.85; }
+.narrative-lede {
+  font-size: 14px; font-weight: 500; color: var(--text-1);
+  line-height: 1.6; margin-bottom: 6px; letter-spacing: -0.01em;
+}
+.narrative-context {
+  font-size: 11px; color: var(--text-2); line-height: 1.7;
+}
+.narrative-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.18);
+  border-radius: 99px; padding: 2px 9px;
+  font-size: 10px; font-weight: 600; color: #dc2626;
+  vertical-align: middle; margin: 0 3px;
+}
+.narrative-pill-green {
+  background: rgba(22,163,74,0.08); border-color: rgba(22,163,74,0.18); color: #16a34a;
+}
 
-/* Agritech card */
+/* ── Intro card ── */
+.intro-card {
+  background: rgba(255,255,255,0.80);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.7);
+  border-top: 2px solid rgba(22,163,74,0.35);
+  border-radius: var(--r); padding: 18px 22px; margin: 4px 0 10px;
+  animation: slideDown 0.4s ease both;
+  box-shadow: var(--sh-md);
+}
+.intro-heading { font-size: 15px; font-weight: 600; color: var(--text-1); margin: 0 0 12px; letter-spacing: -0.02em; }
+
+/* ── Agritech card ── */
 .agritech-card {
-  background: var(--surface); border: 1px solid var(--glass-b);
+  background: rgba(255,255,255,0.76);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.65);
   border-radius: var(--r); padding: 14px 16px; margin-bottom: 10px;
-  box-shadow: var(--sh-sm); animation: fadeSlideUp 0.35s ease both;
+  box-shadow: var(--sh-sm);
+  animation: fadeSlideUp 0.35s ease both;
   transition: transform 0.2s, box-shadow 0.2s;
 }
-.agritech-card:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
+.agritech-card:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
 .agritech-header { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
-.agritech-title { font-size: 13px; font-weight: 600; color: var(--text-1); flex: 1; }
-.agritech-badges { display: flex; gap: 5px; }
+.agritech-title { font-size: 13px; font-weight: 600; color: var(--text-1); flex: 1; letter-spacing: -0.01em; }
+.agritech-badges { display: flex; gap: 5px; flex-wrap: wrap; }
 .badge {
   font-size: 8px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  padding: 2px 7px; border-radius: 3px;
+  padding: 2px 7px; border-radius: 4px;
 }
 .badge-impact-high       { background: rgba(22,163,74,0.12);  color: #15803d; }
 .badge-impact-medium     { background: rgba(234,179,8,0.12);  color: #b45309; }
-.badge-impact-low        { background: rgba(148,163,184,0.12);color: #64748b; }
+.badge-impact-low        { background: rgba(148,163,184,0.14);color: #64748b; }
 .badge-feasibility-high  { background: rgba(14,165,233,0.12); color: #0369a1; }
 .badge-feasibility-medium{ background: rgba(168,85,247,0.12); color: #7e22ce; }
 .badge-feasibility-low   { background: rgba(239,68,68,0.12);  color: #b91c1c; }
-.agritech-desc { font-size: 11px; line-height: 1.7; color: var(--text-2); margin-bottom: 6px; }
+.agritech-desc { font-size: 11px; line-height: 1.75; color: var(--text-2); margin-bottom: 6px; }
 .agritech-meta { display: flex; gap: 14px; font-size: 10px; color: var(--text-3); }
 .agritech-meta span { display: flex; align-items: center; gap: 3px; }
 
-/* Crop shift row */
+/* ── Crop shift row ── */
 .shift-section { margin: 12px 0; }
 .shift-heading { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 8px; }
 .shift-crop-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .shift-crop-name { font-size: 11px; font-weight: 500; color: var(--text-2); min-width: 64px; }
-.shift-track { flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; position: relative; }
+.shift-track { flex: 1; height: 8px; background: rgba(0,0,0,0.07); border-radius: 4px; overflow: hidden; position: relative; }
 .shift-bar-now { height: 8px; border-radius: 4px; transform: scaleX(0); transform-origin: left; animation: barGrow 0.8s ease-out forwards; }
 .shift-bar-future { height: 8px; border-radius: 4px; position: absolute; top: 0; transform: scaleX(0); transform-origin: left; animation: barGrow 0.9s 0.1s ease-out forwards; opacity: 0.4; }
 .shift-pct { font-size: 10px; font-variant-numeric: tabular-nums; color: var(--text-3); min-width: 34px; text-align: right; }
 .shift-delta { font-size: 10px; font-weight: 600; min-width: 42px; text-align: right; }
 
-/* Method note */
+/* ── Method note ── */
 .method-note {
   font-size: 10px; color: var(--text-3); line-height: 1.65;
-  background: rgba(14,165,233,0.04); border: 1px solid rgba(14,165,233,0.12);
-  border-radius: 8px; padding: 9px 13px; margin-top: 12px;
+  background: rgba(14,165,233,0.04); border: 1px solid rgba(14,165,233,0.1);
+  border-radius: var(--r-sm); padding: 9px 13px; margin-top: 12px;
 }
 .method-note strong { color: var(--text-2); font-weight: 500; }
 
-/* Misc UI */
-.sep { border: none; border-top: 1px solid #e2e8f0; margin: 13px 0; }
+/* ── Glass panel (generic) ── */
+.glass-panel {
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: var(--r);
+  box-shadow: var(--sh-sm);
+}
+
+/* ── Misc UI ── */
+.sep { border: none; border-top: 1px solid rgba(0,0,0,0.07); margin: 13px 0; }
 .radio-label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; display: block; }
 .day-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
 .data-footer { font-size: 10px; color: var(--text-3); letter-spacing: 0.04em; line-height: 2.0; }
 .no-data-note { font-size: 10px; color: var(--text-3); letter-spacing: 0.04em; padding: 2px 4px 6px; }
 
-/* Tabs */
+/* ── Tabs ── */
 button[data-baseweb="tab"] {
   color: var(--text-3) !important; font-size: 11px !important;
   letter-spacing: 0.08em !important; text-transform: uppercase !important;
   background: transparent !important; font-family: 'Inter', sans-serif !important;
 }
 button[data-baseweb="tab"][aria-selected="true"] { color: var(--text-1) !important; }
-[data-testid="stTabs"] [data-baseweb="tab-border"] { background: #e2e8f0 !important; }
+[data-testid="stTabs"] [data-baseweb="tab-border"] { background: rgba(0,0,0,0.08) !important; }
 [data-testid="stTabsContent"] { background: transparent !important; padding-top: 10px !important; }
 
-/* Keyframes */
+/* ── Slider track and select styling ── */
+[data-testid="stSlider"] [data-baseweb="slider"] {
+  --fill-color: #16a34a;
+}
+div[data-baseweb="select"] > div {
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(0,0,0,0.09) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* ── Keyframes ── */
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-16px); }
+  from { opacity: 0; transform: translateY(-18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes shake {
@@ -403,43 +493,58 @@ button[data-baseweb="tab"][aria-selected="true"] { color: var(--text-1) !importa
   0%, 100% { transform: scale(1);   opacity: 1; }
   50%       { transform: scale(1.5); opacity: 0.65; }
 }
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
 </style>
 """
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86_400 * 7, persist="disk", show_spinner=False)
 def _fetch_indicator(code: str) -> dict[str, tuple[float, str]]:
-    url = f"{WB_BASE}/{code}?format=json&mrv=1&per_page=300"
+    # mrv=5 = last 5 reported years; we pick the most recent non-null per country.
+    # Food indicators lag 2-3 years so mrv=1 returns empty for most countries.
+    url = f"{WB_BASE}/{code}?format=json&mrv=5&per_page=1000"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        r = requests.get(url, headers=HEADERS, timeout=20)
         r.raise_for_status()
         payload = r.json()
     except Exception:
         return {}
     if len(payload) < 2 or not payload[1]:
         return {}
-    out: dict[str, tuple[float, str]] = {}
+    latest: dict[str, tuple[int, float, str]] = {}
     for item in payload[1]:
         iso = item.get("countryiso3code", "")
         val = item.get("value")
         yr  = str(item.get("date", ""))
-        if iso and len(iso) == 3 and iso.isalpha() and val is not None:
-            out[iso] = (float(val), yr)
-    return out
+        if not (iso and len(iso) == 3 and iso.isalpha() and val is not None):
+            continue
+        yr_int = int(yr) if yr.isdigit() else 0
+        if iso not in latest or yr_int > latest[iso][0]:
+            latest[iso] = (yr_int, float(val), yr)
+    return {iso: (v, y) for iso, (_, v, y) in latest.items()}
 
 
 @st.cache_data(ttl=86_400 * 7, persist="disk", show_spinner=False)
 def load_food_data() -> pd.DataFrame:
     raw = {key: _fetch_indicator(code) for key, code in FOOD_INDICATORS.items()}
+    # Build rows from all ISOs that have at least food_import_pct OR food_prod_index
+    all_isos = set(raw["food_import_pct"]) | set(raw["food_prod_index"])
     rows = []
-    for iso, (imp_pct, yr) in raw["food_import_pct"].items():
+    for iso in all_isos:
+        imp_entry  = raw["food_import_pct"].get(iso)
+        prod_entry = raw["food_prod_index"].get(iso)
+        undr_entry = raw["undernourishment"].get(iso)
+        land_entry = raw["agri_land_pct"].get(iso)
         rows.append({
-            "iso":            iso,
-            "year":           yr,
-            "food_import_pct":  imp_pct,
-            "food_prod_index":  raw["food_prod_index"].get(iso,    (None, ""))[0],
-            "undernourishment": raw["undernourishment"].get(iso,   (None, ""))[0],
-            "agri_land_pct":    raw["agri_land_pct"].get(iso,     (None, ""))[0],
+            "iso":              iso,
+            "year":             (imp_entry or prod_entry or ("", ""))[1],
+            "food_import_pct":  imp_entry[0]  if imp_entry  else None,
+            "food_prod_index":  prod_entry[0] if prod_entry else None,
+            "undernourishment": undr_entry[0] if undr_entry else None,
+            "agri_land_pct":    land_entry[0] if land_entry else None,
         })
     df = pd.DataFrame(rows)
     df["fragility"] = df.apply(_compute_fragility, axis=1)
@@ -630,6 +735,92 @@ def food_story(r: pd.Series, rank: int, avg_frag: float) -> str:
 
     middle = (". ".join(parts).capitalize() + ".") if parts else f"Global average fragility is {avg_frag:.0f}."
     return f"{opening} {middle} Ranked #{rank} globally."
+
+
+def country_dramatic_fact(r: pd.Series, water_stress: float | None) -> tuple[str, str]:
+    """Returns (html_fact_sentence, accent_color) — a vivid single-sentence callout."""
+    name = r.get("country_name", "")
+    imp  = r.get("food_import_pct")
+    undr = r.get("undernourishment")
+    prod = r.get("food_prod_index")
+    frag = r.get("fragility")
+
+    if imp is not None and not pd.isna(imp) and imp > 75:
+        return (
+            f"<strong>{imp:.0f}%</strong> of everything {name} buys from the world is food. "
+            f"Every trade disruption — war, sanctions, shipping crisis — arrives directly on people's plates.",
+            "#dc2626"
+        )
+    if undr is not None and not pd.isna(undr) and undr > 25:
+        n_in = max(2, int(100 / undr))
+        return (
+            f"1 in {n_in} people in {name} doesn't have enough to eat — not because food doesn't exist, "
+            f"but because they can't afford it. Undernourishment at this level is already a crisis.",
+            "#dc2626"
+        )
+    if water_stress is not None and not pd.isna(water_stress) and water_stress > 100:
+        return (
+            f"{name} withdraws more freshwater than nature replenishes each year — it is mining ancient "
+            f"reserves that will not refill in any human lifetime.",
+            "#ea580c"
+        )
+    if prod is not None and not pd.isna(prod) and prod < 80:
+        gap = round(100 - prod)
+        return (
+            f"Domestic food output has fallen <strong>{gap}%</strong> since the 2014–16 baseline. "
+            f"{name} grows meaningfully less food today than it did a decade ago.",
+            "#f97316"
+        )
+    if imp is not None and not pd.isna(imp) and imp > 50:
+        return (
+            f"More than half of {name}'s imports are food. A sharp rise in global commodity prices "
+            f"doesn't stay abstract — it becomes a direct hit to household budgets.",
+            "#f97316"
+        )
+    if undr is not None and not pd.isna(undr) and undr > 10:
+        return (
+            f"{undr:.0f}% of the population is chronically undernourished — "
+            f"meaning millions face this not as an emergency, but as a permanent condition of daily life.",
+            "#d97706"
+        )
+    if frag is not None and frag < 20:
+        return (
+            f"{name} maintains one of the world's more resilient food systems — strong domestic production, "
+            f"manageable import dependency, and low levels of chronic hunger.",
+            "#16a34a"
+        )
+    return (
+        f"{name}'s food security sits at the intersection of what it can grow, what it can afford to buy, "
+        f"and how equitably that food reaches the people who need it most.",
+        "#64748b"
+    )
+
+
+def global_narrative_html(gs: dict, df: pd.DataFrame) -> str:
+    valid = df.dropna(subset=["fragility"])
+    high_or_crit = int((valid["fragility"] >= 60).sum())
+    avg           = gs["avg_fragility"]
+    critical      = gs["critical_count"]
+    worst_name    = gs["worst_name"]
+
+    lede = (
+        f'<span class="narrative-pill">{critical}</span> countries are in critical food fragility right now. '
+        f'<span class="narrative-pill">{high_or_crit}</span> score High or Critical — '
+        f'meaning a single shock could trigger an emergency.'
+    )
+    context = (
+        f'The global average fragility score is <strong>{avg:.0f}/100</strong> — in the moderate band, '
+        f'but rising. Most vulnerability concentrates in sub-Saharan Africa and parts of South Asia, '
+        f'where import dependence, declining domestic output, and water stress overlap. '
+        f'<strong>{worst_name}</strong> currently scores highest. '
+        f'Click any country on the map to explore its specific risk profile.'
+    )
+    return (
+        '<div class="narrative-bar">'
+        f'<div class="narrative-lede">{lede}</div>'
+        f'<div class="narrative-context">{context}</div>'
+        '</div>'
+    )
 
 
 def agritech_recommendations(frag_score: float | None, water_stress: float | None) -> list[dict]:
@@ -1056,13 +1247,21 @@ def _country_panel_v2(r: pd.Series, rank: int, avgs: dict, water_stress_val: flo
         '</div>'
     )
 
+    # Dramatic fact callout
+    fact_html_text, fact_color = country_dramatic_fact(r, water_stress_val)
+    dramatic = (
+        f'<div class="dramatic-fact" style="--accent-color:{fact_color}">'
+        f'{fact_html_text}'
+        f'</div>'
+    )
+
     return (
         f'<p class="country-heading">{name}</p>'
         f'<div class="grain-badge">{badge_svg}'
         f'<span class="frag-band-label" style="color:{color}">{label}</span>'
         f'<span class="frag-band-label" style="margin-left:4px">· {_fmt(frag,1)}/100</span>'
         f'</div>'
-        f'{compound}{decomp_bar}{cards}{story}{method_note}'
+        f'{dramatic}{compound}{decomp_bar}{cards}{story}{method_note}'
     )
 
 
@@ -1096,9 +1295,12 @@ def intro_card_html(gs: dict) -> str:
          "Undernourishment rate — the proportion of people who cannot access enough calories. This is the real-world consequence of the other two."),
     ]
     pillar_html = "".join(
-        f'<div style="flex:1;min-width:160px;background:rgba(255,255,255,0.7);'
-        f'border:1px solid {col}22;border-top:3px solid {col};border-radius:8px;'
-        f'padding:11px 13px">'
+        f'<div style="flex:1;min-width:160px;'
+        f'background:rgba(255,255,255,0.72);'
+        f'backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);'
+        f'border:1px solid rgba(255,255,255,0.65);border-top:3px solid {col};border-radius:10px;'
+        f'padding:13px 15px;'
+        f'box-shadow:0 4px 16px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8)">'
         f'<div style="font-size:18px;margin-bottom:4px">{icon}</div>'
         f'<div style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:2px">{title}</div>'
         f'<div style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:{col};margin-bottom:5px">{weight} of score</div>'
@@ -1269,6 +1471,7 @@ if not st.session_state.intro_dismissed:
             st.rerun()
 
 st.markdown(_stats_strip_v2(gs), unsafe_allow_html=True)
+st.markdown(global_narrative_html(gs, df_food), unsafe_allow_html=True)
 
 no_data_ct = int(df_food["fragility"].isna().sum())
 
@@ -1325,9 +1528,10 @@ legend_items = "".join(
     for color, band, score, desc in LEGEND_BANDS
 )
 st.markdown(
-    f'<div style="background:rgba(255,255,255,0.88);border:1px solid rgba(0,0,0,0.07);'
-    f'border-radius:10px;padding:11px 16px;margin:4px 0 4px;'
-    f'box-shadow:0 1px 3px rgba(0,0,0,0.05)">'
+    f'<div style="background:rgba(255,255,255,0.74);border:1px solid rgba(255,255,255,0.65);'
+    f'backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);'
+    f'border-radius:12px;padding:12px 16px;margin:4px 0 6px;'
+    f'box-shadow:0 4px 16px rgba(0,0,0,0.07),inset 0 1px 0 rgba(255,255,255,0.7)">'
     f'<div style="font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;'
     f'color:#94a3b8;margin-bottom:8px">How to read the map</div>'
     f'<div style="display:flex;gap:12px;flex-wrap:wrap">{legend_items}</div>'
