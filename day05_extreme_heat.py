@@ -1166,7 +1166,7 @@ World Bank ER.H2O.FWTL.ZS · ILO heat-labour guidelines<br>
 IPCC AR6 WG1 · Steadman apparent temperature formula
 </div>""", unsafe_allow_html=True)
         st.markdown('<hr class="sep">', unsafe_allow_html=True)
-        st.page_link("day04_food_fragility.py", label="← Day 04 · Food Fragility")
+        st.markdown('<div class="data-footer"><a href="day04_food_fragility" style="color:var(--text-3)">← Day 04 · Food Fragility</a></div>', unsafe_allow_html=True)
 
     # ── Main area ──────────────────────────────────────────────────────────────
     # Intro card
