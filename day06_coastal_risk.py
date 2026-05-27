@@ -1,11 +1,11 @@
 import math
+import datetime
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import requests
 import folium
-from folium.plugins import HeatMap
 from streamlit_folium import st_folium
 
 st.set_page_config(
@@ -421,7 +421,7 @@ def load_tide_gauge(station_id: str) -> dict:
         r = requests.get(NOAA_API, params={
             "station": station_id, "product": "monthly_mean",
             "datum": "MSL", "time_zone": "GMT",
-            "begin_date": "20000101", "end_date": "20231231",
+            "begin_date": "20000101", "end_date": datetime.date.today().strftime("%Y%m%d"),
             "units": "metric", "format": "json",
             "application": "ResilienceStack",
         }, headers=HEADERS, timeout=30)
@@ -719,12 +719,14 @@ def make_risk_map(df: pd.DataFrame, selected_iso: str, ssp: str, year: int) -> g
     slr_m = get_ipcc_slr(ssp, year)
     plot_df = df.copy()
 
-    # Scale from pop_1m using simple linear interpolation
     def _pop_at(r):
-        p1, p2 = r["pop_1m_k"], r["pop_2m_k"]
+        p1, p2, p3 = r["pop_1m_k"], r["pop_2m_k"], r["pop_3m_k"]
         if slr_m <= 1.0:
             return p1 * slr_m
-        return p1 + (p2 - p1) * (slr_m - 1.0)
+        elif slr_m <= 2.0:
+            return p1 + (p2 - p1) * (slr_m - 1.0)
+        else:
+            return p2 + (p3 - p2) * min(slr_m - 2.0, 1.0)
 
     plot_df["disp"] = plot_df.apply(_pop_at, axis=1).clip(lower=0)
     plot_df["disp_fmt"] = plot_df["disp"].apply(lambda v: _fmt_pop(int(v)))
@@ -779,9 +781,11 @@ def make_risk_map(df: pd.DataFrame, selected_iso: str, ssp: str, year: int) -> g
 
 
 def make_tide_chart(gauge_data: dict, station_name: str) -> go.Figure:
-    years  = gauge_data.get("years", [])
-    values = gauge_data.get("values_mm", [])
-    slope  = gauge_data.get("slope_mm_yr", 0)
+    years        = gauge_data.get("years", [])
+    values       = gauge_data.get("values_mm", [])
+    slope        = gauge_data.get("slope_mm_yr", 0)
+    early_slope  = gauge_data.get("early_slope", 0)
+    recent_slope = gauge_data.get("recent_slope", 0)
     if not years:
         return go.Figure()
 
@@ -790,7 +794,6 @@ def make_tide_chart(gauge_data: dict, station_name: str) -> go.Figure:
     y_m = sum(values) / n
     trend = [y_m + slope * (y - x_m) for y in years]
 
-    # Running 5-year average for acceleration visibility
     window = 5
     smooth = []
     for i in range(n):
@@ -799,6 +802,22 @@ def make_tide_chart(gauge_data: dict, station_name: str) -> go.Figure:
         smooth.append(sum(values[lo:hi]) / (hi - lo))
 
     fig = go.Figure()
+
+    # Shade acceleration zone (second half) when detected
+    accel = recent_slope - early_slope
+    if accel > 0.5 and n > 4:
+        mid_year = years[n // 2]
+        fig.add_vrect(
+            x0=mid_year - 0.5, x1=years[-1] + 0.5,
+            fillcolor="rgba(220,38,38,0.06)", line_width=0,
+        )
+        fig.add_annotation(
+            x=mid_year, y=max(values) * 0.92,
+            text="⬆ Accelerating",
+            showarrow=False, xanchor="left",
+            font=dict(size=8, color="#dc2626"),
+        )
+
     fig.add_trace(go.Bar(
         x=years, y=values, name="Annual mean SL",
         marker_color="rgba(8,145,178,0.35)", marker_line_width=0,
@@ -811,10 +830,19 @@ def make_tide_chart(gauge_data: dict, station_name: str) -> go.Figure:
     ))
     fig.add_trace(go.Scatter(
         x=years, y=trend, mode="lines",
-        name=f"Linear trend ({slope:+.1f} mm/yr)",
+        name=f"Trend ({slope:+.1f} mm/yr)",
         line=dict(color="#1d4ed8", width=1.8, dash="dot"),
         hoverinfo="skip",
     ))
+    # Label trend slope at right end
+    if trend:
+        fig.add_annotation(
+            x=years[-1], y=trend[-1],
+            text=f"  {slope:+.1f} mm/yr",
+            showarrow=False, xanchor="left",
+            font=dict(size=8, color="#1d4ed8"),
+        )
+
     fig.update_layout(
         height=300, margin=dict(l=8, r=8, t=20, b=8),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.5)",
@@ -836,10 +864,13 @@ def make_city_risk_chart(df: pd.DataFrame, ssp: str, year: int) -> go.Figure:
     plot_df = df.copy()
 
     def _pop(r):
-        p1, p2 = r["pop_1m_k"], r["pop_2m_k"]
+        p1, p2, p3 = r["pop_1m_k"], r["pop_2m_k"], r["pop_3m_k"]
         if slr_m <= 1.0:
             return p1 * slr_m
-        return p1 + (p2 - p1) * (slr_m - 1.0)
+        elif slr_m <= 2.0:
+            return p1 + (p2 - p1) * (slr_m - 1.0)
+        else:
+            return p2 + (p3 - p2) * min(slr_m - 2.0, 1.0)
 
     plot_df["scen_pop"] = plot_df.apply(_pop, axis=1).clip(lower=0)
     top    = plot_df.nlargest(25, "scen_pop").reset_index(drop=True)
@@ -906,16 +937,17 @@ def make_compound_scatter(df: pd.DataFrame, water_stress: dict) -> go.Figure:
             "SLR rate: %{customdata[3]:.1f} mm/yr<extra></extra>"
         ),
     ))
-    fig.add_shape(type="rect", x0=5000, x1=sdf["pop"].max()/1000 * 1.1,
+    x_max_m = sdf["pop"].max() / 1000
+    fig.add_shape(type="rect", x0=5, x1=x_max_m * 1.1,
                   y0=40, y1=110, fillcolor="rgba(29,78,216,0.06)", line_width=0)
-    fig.add_annotation(x=(sdf["pop"].max()/1000 * 0.6), y=105,
+    fig.add_annotation(x=max(6, x_max_m * 0.55), y=105,
                        text="⚠ COMPOUND COASTAL + WATER CRISIS",
                        font=dict(size=8, color="#1d4ed8"), showarrow=False)
     fig.update_layout(
         height=420, margin=dict(l=8, r=8, t=20, b=8),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.52)",
         xaxis=dict(
-            title=dict(text="Population within 1 m elevation (thousands)", font=dict(size=9, color="#334155")),
+            title=dict(text="Population within 1 m of sea level (millions)", font=dict(size=9, color="#334155")),
             showgrid=True, gridcolor="rgba(0,0,0,0.06)", tickfont=dict(size=9, color="#334155"),
         ),
         yaxis=dict(
@@ -931,6 +963,28 @@ def make_compound_scatter(df: pd.DataFrame, water_stress: dict) -> go.Figure:
 
 
 # ── Flood viewer map ───────────────────────────────────────────────────────────
+_FLOOD_LEGEND_HTML = """
+<div style="position:fixed;bottom:20px;left:20px;z-index:1000;
+     background:rgba(255,255,255,0.94);padding:12px 16px;
+     border-radius:8px;border:1px solid rgba(0,0,0,0.10);
+     box-shadow:0 2px 12px rgba(0,0,0,0.14);
+     font-family:Inter,sans-serif;font-size:11px;color:#0c1a2b;min-width:180px">
+  <div style="font-weight:600;margin-bottom:9px;letter-spacing:-0.01em">Flood Risk Zones</div>
+  <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+    <span style="width:14px;height:14px;background:#1e3a5f;display:inline-block;border-radius:2px;flex-shrink:0"></span>
+    <span style="color:#334155">Currently below sea level</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+    <span style="width:14px;height:14px;background:#0891b2;display:inline-block;border-radius:2px;flex-shrink:0"></span>
+    <span style="color:#334155">Flooded at this scenario</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:9px">
+    <span style="width:14px;height:14px;background:#7dd3fc;display:inline-block;border-radius:2px;flex-shrink:0;opacity:0.75"></span>
+    <span style="color:#334155">Near-term risk (+0.5 m)</span>
+  </div>
+</div>"""
+
+
 def make_flood_map(city_name: str, slr_total: float,
                    elev_grid: list[dict], noaa_station: str | None,
                    noaa_ft: int) -> folium.Map:
@@ -956,27 +1010,57 @@ def make_flood_map(city_name: str, slr_total: float,
             pass
 
     elif elev_grid and slr_total > 0:
-        # OpenTopoData elevation grid → HeatMap of flooded cells
-        flooded = [
-            [pt["lat"], pt["lon"], 1.0]
-            for pt in elev_grid
-            if pt["elev"] <= slr_total and pt["elev"] != 9999
-        ]
-        if flooded:
-            HeatMap(
-                flooded,
-                radius=28, blur=15,
-                gradient={
-                    "0.0": "rgba(14,165,233,0.0)",
-                    "0.4": "rgba(14,165,233,0.55)",
-                    "0.7": "rgba(2,132,199,0.70)",
-                    "1.0": "rgba(29,78,216,0.80)",
-                },
-                min_opacity=0.45,
-                max_val=1.0,
-            ).add_to(m)
+        # Compute cell half-dimensions from city radius + fixed grid size
+        radius_km = city["radius"]
+        grid = 28
+        half_lat = (radius_km / 111.0) / (grid / 2) / 2
+        half_lon = (radius_km / (111.0 * math.cos(math.radians(city["lat"])))) / (grid / 2) / 2
 
-    # City marker with note
+        # Build GeoJSON FeatureCollection: one rectangle per grid cell, colored by risk zone
+        features = []
+        for pt in elev_grid:
+            elev = pt["elev"]
+            if elev == 9999:
+                continue
+            if elev <= 0:
+                fill_color, fill_opacity = "#1e3a5f", 0.82
+            elif elev <= slr_total:
+                fill_color, fill_opacity = "#0891b2", 0.72
+            elif elev <= slr_total + 0.5:
+                fill_color, fill_opacity = "#7dd3fc", 0.48
+            else:
+                continue  # safe land — skip
+
+            lat, lon = pt["lat"], pt["lon"]
+            features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [lon - half_lon, lat - half_lat],
+                        [lon + half_lon, lat - half_lat],
+                        [lon + half_lon, lat + half_lat],
+                        [lon - half_lon, lat + half_lat],
+                        [lon - half_lon, lat - half_lat],
+                    ]],
+                },
+                "properties": {"fc": fill_color, "fo": fill_opacity},
+            })
+
+        if features:
+            folium.GeoJson(
+                {"type": "FeatureCollection", "features": features},
+                style_function=lambda f: {
+                    "fillColor": f["properties"]["fc"],
+                    "color": "none",
+                    "weight": 0,
+                    "fillOpacity": f["properties"]["fo"],
+                },
+                name="Flood zones",
+            ).add_to(m)
+            m.get_root().html.add_child(folium.Element(_FLOOD_LEGEND_HTML))
+
+    # City centre marker
     folium.CircleMarker(
         location=[city["lat"], city["lon"]],
         radius=7, color="#0891b2", fill=True, fill_color="#0891b2",
@@ -1328,35 +1412,37 @@ Tide gauges show this acceleration is already detectable at individual stations.
                 unsafe_allow_html=True,
             )
 
-        c_bar, c_cards = st.columns([3, 2])
-        with c_bar:
+        c_ssp4, c_yr4 = st.columns([2, 1])
+        with c_ssp4:
             ssp4 = st.selectbox(
                 "Scenario",
                 list(SSP_LABELS.keys()),
                 format_func=lambda k: SSP_LABELS[k],
                 index=2, key="ssp_comp",
             )
+        with c_yr4:
             year4 = st.select_slider("Year ", [2030,2040,2050,2060,2070,2080,2090,2100],
                                      value=2100, key="yr_comp")
-            city_fig = make_city_risk_chart(df, ssp4, year4)
-            st.plotly_chart(city_fig, use_container_width=True)
 
-        with c_cards:
-            st.markdown('<div style="padding:12px 0">', unsafe_allow_html=True)
-            for title, body in [
-                ("Saltwater intrusion",
-                 "As seas rise, salt water pushes into coastal aquifers. Bangladesh's coastal wells are already brackish — a creeping freshwater emergency underneath the flooding one."),
-                ("Delta agriculture collapse",
-                 "The Mekong, Nile, and Ganges-Brahmaputra deltas together feed ~500M people. At 2m SLR, all three face catastrophic farmland loss within decades."),
-                ("Climate migration trigger",
-                 "World Bank projects 216M internal climate migrants by 2050. Coastal flooding in BGD, VNM, and PHL is the single largest driver — this feeds directly into Day 09's migration index."),
-            ]:
-                st.markdown(
-                    f'<div class="flood-info" style="margin-bottom:8px">'
-                    f'<strong>{title}</strong><br>'
-                    f'<span style="font-size:11px">{body}</span></div>',
-                    unsafe_allow_html=True,
-                )
+        city_fig = make_city_risk_chart(df, ssp4, year4)
+        st.plotly_chart(city_fig, use_container_width=True)
+
+        # Insight cards below the chart in a 3-column row
+        c1, c2, c3 = st.columns(3)
+        for col, (title, body) in zip([c1, c2, c3], [
+            ("🌊 Saltwater intrusion",
+             "As seas rise, salt water pushes into coastal aquifers. Bangladesh's coastal wells are already brackish — a creeping freshwater emergency underneath the flooding one."),
+            ("🌾 Delta agriculture collapse",
+             "The Mekong, Nile, and Ganges-Brahmaputra deltas together feed ~500M people. At 2m SLR, all three face catastrophic farmland loss within decades."),
+            ("🏘 Climate migration trigger",
+             "World Bank projects 216M internal climate migrants by 2050. Coastal flooding in BGD, VNM, and PHL is the single largest driver — this feeds directly into Day 09's migration index."),
+        ]):
+            col.markdown(
+                f'<div class="flood-info" style="height:100%;box-sizing:border-box">'
+                f'<strong>{title}</strong><br>'
+                f'<span style="font-size:11px">{body}</span></div>',
+                unsafe_allow_html=True,
+            )
 
 
 if __name__ == "__main__":
