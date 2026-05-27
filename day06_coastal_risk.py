@@ -627,6 +627,112 @@ def slr_to_noaa_ft(slr_m: float) -> int:
     return max(1, min(10, round(ft)))
 
 
+def _pop_at_slr(pop_1m: int, pop_2m: int, pop_3m: int, slr_m: float) -> int:
+    """Population displaced (K) at given effective SLR — mirrors the inline _pop_at logic."""
+    if slr_m <= 0:
+        return 0
+    elif slr_m <= 1.0:
+        return int(pop_1m * slr_m)
+    elif slr_m <= 2.0:
+        return int(pop_1m + (pop_2m - pop_1m) * (slr_m - 1.0))
+    else:
+        return int(pop_2m + (pop_3m - pop_2m) * min(slr_m - 2.0, 1.0))
+
+
+@st.cache_data(ttl=86_400 * 90, persist="disk", show_spinner=False)
+def load_world_geojson() -> dict:
+    """Fetch naturalearth 110m world-countries GeoJSON (folium example dataset).
+    'id' field on each feature is the ISO alpha-3 code."""
+    url = ("https://raw.githubusercontent.com/python-visualization/folium/"
+           "main/examples/data/world-countries.json")
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=30)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {"type": "FeatureCollection", "features": []}
+
+
+def make_world_flood_map(df: pd.DataFrame, ssp: str, year: int) -> folium.Map:
+    """Global coastal risk map: choropleth by displaced-population % + city bubbles.
+
+    Country fill: risk % at effective SLR for the chosen SSP/year (scaled by subsidence).
+    City circles: all FLOOD_CITIES, radius ∝ effective SLR, colour = severity tier.
+    """
+    world_geo  = load_world_geojson()
+    slr_global = get_ipcc_slr(ssp, year)
+
+    # Build per-country risk % at this scenario
+    risk_rows = []
+    for iso, vals in COASTAL_DATA.items():
+        p1, p2, p3, sub_mm_yr, _, pop_total = vals
+        slr_eff = effective_slr(ssp, year, sub_mm_yr)
+        exposed  = _pop_at_slr(p1, p2, p3, slr_eff)
+        pct      = round(exposed / pop_total * 100, 3) if pop_total > 0 else 0.0
+        risk_rows.append({"iso": iso, "risk_pct": pct})
+    risk_df = pd.DataFrame(risk_rows)
+
+    m = folium.Map(
+        location=[15, 10], zoom_start=2,
+        tiles="CartoDB positron",
+        attr="© CartoDB · © OpenStreetMap",
+        max_zoom=14,
+    )
+
+    if world_geo.get("features"):
+        folium.Choropleth(
+            geo_data=world_geo,
+            data=risk_df,
+            columns=["iso", "risk_pct"],
+            key_on="feature.id",
+            fill_color="YlOrRd",
+            fill_opacity=0.72,
+            line_opacity=0.25,
+            line_color="#ffffff",
+            nan_fill_color="rgba(148,163,184,0.10)",
+            nan_fill_opacity=0.4,
+            legend_name=f"Population displaced (%) — {ssp} {year}",
+            threshold_scale=[0, 1, 5, 15, 30, 55],
+        ).add_to(m)
+
+    # City bubble markers — size and colour by effective SLR severity
+    for city_name, city in FLOOD_CITIES.items():
+        sub     = city.get("sub", 0.0)
+        slr_eff = effective_slr(ssp, year, sub)
+        sub_m   = sub * (year - 2024) / 1000.0
+
+        if slr_eff > 3.0:
+            c = "#7f1d1d"
+        elif slr_eff > 1.5:
+            c = "#dc2626"
+        elif slr_eff > 0.8:
+            c = "#f97316"
+        else:
+            c = "#0891b2"
+
+        radius = min(18, max(5, slr_eff * 5 + 3))
+
+        sub_line = (f"  +  subsidence +{sub_m:.2f}m" if sub_m >= 0.05 else "")
+        folium.CircleMarker(
+            location=[city["lat"], city["lon"]],
+            radius=radius,
+            color=c, fill=True, fill_color=c,
+            fill_opacity=0.78, weight=1.5,
+            tooltip=folium.Tooltip(
+                f"<div style='font-family:Inter,sans-serif;min-width:190px'>"
+                f"<b style='font-size:12px'>{city_name}</b><br>"
+                f"<span style='color:#334155;font-size:10px'>"
+                f"Global SLR +{slr_global:.2f}m{sub_line}<br>"
+                f"<b>Effective SLR: +{slr_eff:.2f}m</b><br>"
+                f"{city['note']}"
+                f"</span></div>",
+                sticky=True,
+            ),
+        ).add_to(m)
+
+    return m
+
+
 def _fmt(v, dec: int = 1, unit: str = "") -> str:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return "—"
@@ -1259,9 +1365,12 @@ These cities are experiencing the 2100 worst-case scenario <em>right now</em>.
 
     # ── TAB 2: Flood Viewer ────────────────────────────────────────────────────
     with tab2:
+        WORLD_OPT  = "🌍  World Overview"
+        city_opts  = [WORLD_OPT] + sorted(FLOOD_CITIES.keys())
+
         c_city, c_ssp2, c_yr2 = st.columns([2, 1.5, 1])
         with c_city:
-            city_name = st.selectbox("Select city", sorted(FLOOD_CITIES.keys()), key="city_06")
+            city_name = st.selectbox("Select city / region", city_opts, key="city_06")
         with c_ssp2:
             ssp2 = st.selectbox(
                 "SSP scenario",
@@ -1273,92 +1382,152 @@ These cities are experiencing the 2100 worst-case scenario <em>right now</em>.
             year2 = st.select_slider("Year", [2030,2040,2050,2060,2070,2080,2090,2100],
                                      value=2050, key="yr_flood")
 
-        city   = FLOOD_CITIES[city_name]
-        sub    = city.get("sub", 0.0)
-        slr_g  = get_ipcc_slr(ssp2, year2)
-        slr_eff = effective_slr(ssp2, year2, sub)
+        slr_g    = get_ipcc_slr(ssp2, year2)
         ssp_col2 = SSP_COLORS[ssp2]
 
-        # Subsidence warning
-        sub_note = ""
-        if sub >= 5:
-            sub_note = (f'<div class="subsidence-warning">⚠ <strong>High subsidence city:</strong> '
-                        f'land is sinking at <strong>{sub:.0f} mm/yr</strong> from groundwater extraction. '
-                        f'Effective relative SLR at {year2} = global {slr_g:.2f} m + subsidence {(sub*(year2-2024)/1000):.2f} m '
-                        f'= <strong>{slr_eff:.2f} m total</strong>. '
-                        f'The flood zone shown already accounts for this.</div>')
+        # ── WORLD OVERVIEW ─────────────────────────────────────────────────────
+        if city_name == WORLD_OPT:
+            # Global summary stats across all COASTAL_DATA countries
+            total_risk_k, critical_n = 0, 0
+            for iso, vals in COASTAL_DATA.items():
+                p1, p2, p3, sub_mm, _, pop_total = vals
+                exp = _pop_at_slr(p1, p2, p3, effective_slr(ssp2, year2, sub_mm))
+                total_risk_k += exp
+                if pop_total and exp / pop_total >= 0.20:
+                    critical_n += 1
 
-        noaa_station = city.get("noaa")
-        noaa_ft      = slr_to_noaa_ft(slr_eff) if noaa_station else 0
-        data_source  = (f"NOAA Digital Coast inundation tiles ({noaa_ft}ft scenario)"
-                        if noaa_station
-                        else "AWS Terrarium tiles · SRTM-derived pixel-level elevation")
+            worst_city_name, worst_slr = max(
+                ((cn, effective_slr(ssp2, year2, cd.get("sub", 0)))
+                 for cn, cd in FLOOD_CITIES.items()),
+                key=lambda x: x[1],
+            )
 
-        st.markdown(
-            f'<div class="flood-info">'
-            f'<span class="ssp-badge" style="background:{ssp_col2}22;color:{ssp_col2};margin-right:8px">{ssp2}</span>'
-            f'<strong>{city_name}</strong> · {year2} · '
-            f'Global SLR <strong>+{slr_g:.2f} m</strong>'
-            f'{"" if sub < 1 else f" + subsidence <strong>+{(sub*(year2-2024)/1000):.2f} m</strong>"}'
-            f' = effective <strong>+{slr_eff:.2f} m</strong><br>'
-            f'<span style="font-size:10px;color:var(--text-3)">{city["note"]} · Source: {data_source}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        if sub_note:
-            st.markdown(sub_note, unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="flood-info">'
+                f'<span class="ssp-badge" style="background:{ssp_col2}22;color:{ssp_col2};margin-right:8px">{ssp2}</span>'
+                f'Global mean SLR at {year2}: <strong>+{slr_g:.2f} m</strong> (IPCC AR6 median). '
+                f'Country colours = population displaced as % of total, adjusted for local subsidence. '
+                f'Bubble markers show all {len(FLOOD_CITIES)} tracked flood-risk cities — size and colour reflect effective SLR. '
+                f'Hover for city detail.'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-        # Fetch pixel-level terrain tiles or load from cache
-        terrain = None
-        if not noaa_station and slr_eff > 0:
-            # Adaptive zoom: smaller radius → higher zoom → finer pixels
-            radius_km = city["radius"]
-            zoom = 13 if radius_km <= 8 else (12 if radius_km <= 20 else 11)
+            c_w1, c_w2, c_w3, c_w4 = st.columns(4)
+            for col, icon, val, label in [
+                (c_w1, "🌊", f"+{slr_g:.2f}m",          "global mean SLR · IPCC AR6"),
+                (c_w2, "👥", _fmt_pop(total_risk_k),      "people at risk across tracked nations"),
+                (c_w3, "🔴", str(critical_n),              "countries at critical or worse risk"),
+                (c_w4, "📍", worst_city_name.split(",")[0],
+                             f"+{worst_slr:.2f}m effective SLR · highest tracked"),
+            ]:
+                col.markdown(
+                    f'<div class="strip-card" style="padding:10px 12px">'
+                    f'<div class="strip-icon">{icon}</div>'
+                    f'<div class="strip-n" style="font-size:18px">{val}</div>'
+                    f'<div class="strip-l">{label}</div></div>',
+                    unsafe_allow_html=True,
+                )
 
-            with st.spinner(f"Loading terrain tiles for {city_name} (cached 30 days)…"):
-                terrain = fetch_terrain_elevation(city["lat"], city["lon"], zoom=zoom)
+            with st.spinner("Building world flood risk map…"):
+                world_map = make_world_flood_map(df, ssp2, year2)
+            st_folium(world_map, use_container_width=True, height=560, returned_objects=[])
 
-            if terrain is None or terrain["tiles"] == 0:
-                st.warning("Could not load terrain tiles. Check your internet connection and retry.")
-            else:
-                elev = terrain["elevation"]
-                total_px   = elev.size
-                flooded_px = int(np.sum((elev > 0) & (elev <= slr_eff)))
-                below_px   = int(np.sum(elev <= 0))
-                risk_px    = int(np.sum((elev > slr_eff) & (elev <= slr_eff + 0.5)))
-                flooded_pct = (flooded_px + below_px) / total_px * 100
-                px_res_m    = terrain["px_res_m"]
+            st.markdown(
+                '<div class="method-note">'
+                '<strong>Data:</strong> Country choropleth uses coastal exposure data from '
+                'Kulp &amp; Strauss 2019 (Climate Central / Nat. Comms.) with dynamic '
+                'population displacement computed at the selected IPCC AR6 SLR + '
+                'country-average subsidence. City bubble size and colour reflect effective '
+                'relative SLR (global mean + local land subsidence since 2024). '
+                'Countries without data shown in grey. '
+                'Select any city from the dropdown to drill into a pixel-level flood map.</div>',
+                unsafe_allow_html=True,
+            )
 
-                c_f1, c_f2, c_f3, c_f4 = st.columns(4)
-                for col, icon, val, label in [
-                    (c_f1, "🌊", f"+{slr_eff:.2f}m",    "effective SLR at this scenario"),
-                    (c_f2, "📐", f"{flooded_pct:.0f}%",  "of mapped area at flood risk"),
-                    (c_f3, "⚠️", f"{risk_px:,}",         "near-risk pixels (next +0.5m)"),
-                    (c_f4, "🔭", f"~{px_res_m:.0f}m",   "terrain pixel resolution"),
-                ]:
-                    col.markdown(
-                        f'<div class="strip-card" style="padding:10px 12px">'
-                        f'<div class="strip-icon">{icon}</div>'
-                        f'<div class="strip-n" style="font-size:18px">{val}</div>'
-                        f'<div class="strip-l">{label}</div></div>',
-                        unsafe_allow_html=True,
-                    )
+        # ── CITY DETAIL VIEW ───────────────────────────────────────────────────
+        else:
+            city    = FLOOD_CITIES[city_name]
+            sub     = city.get("sub", 0.0)
+            slr_eff = effective_slr(ssp2, year2, sub)
 
-        flood_map = make_flood_map(city_name, slr_eff, terrain, noaa_station, noaa_ft)
-        st_folium(flood_map, use_container_width=True, height=520, returned_objects=[])
+            sub_note = ""
+            if sub >= 5:
+                sub_note = (f'<div class="subsidence-warning">⚠ <strong>High subsidence city:</strong> '
+                            f'land is sinking at <strong>{sub:.0f} mm/yr</strong> from groundwater extraction. '
+                            f'Effective relative SLR at {year2} = global {slr_g:.2f} m + subsidence '
+                            f'{(sub*(year2-2024)/1000):.2f} m = <strong>{slr_eff:.2f} m total</strong>. '
+                            f'The flood zone shown already accounts for this.</div>')
 
-        st.markdown(
-            '<div class="method-note">'
-            '<strong>Methodology:</strong> US cities use NOAA Digital Coast pre-computed inundation tiles '
-            '(precise surveyed DEMs, ±30cm accuracy). International cities use AWS Terrain Tiles '
-            '(Terrarium format, derived from NASA SRTM 90m) decoded at pixel level — every pixel is '
-            'coloured by its elevation zone relative to the effective SLR threshold. '
-            'Navy = already below sea level · Cyan = flooded at this scenario · Sky = near-term risk (+0.5m). '
-            'SRTM includes building heights so urban flood extent may be slightly underestimated. '
-            'Effective SLR = IPCC AR6 median global SLR + local subsidence since 2024. '
-            'Not suitable for site-specific engineering decisions.</div>',
-            unsafe_allow_html=True,
-        )
+            noaa_station = city.get("noaa")
+            noaa_ft      = slr_to_noaa_ft(slr_eff) if noaa_station else 0
+            data_source  = (f"NOAA Digital Coast inundation tiles ({noaa_ft}ft scenario)"
+                            if noaa_station
+                            else "AWS Terrarium tiles · SRTM-derived pixel-level elevation")
+
+            st.markdown(
+                f'<div class="flood-info">'
+                f'<span class="ssp-badge" style="background:{ssp_col2}22;color:{ssp_col2};margin-right:8px">{ssp2}</span>'
+                f'<strong>{city_name}</strong> · {year2} · '
+                f'Global SLR <strong>+{slr_g:.2f} m</strong>'
+                f'{"" if sub < 1 else f" + subsidence <strong>+{(sub*(year2-2024)/1000):.2f} m</strong>"}'
+                f' = effective <strong>+{slr_eff:.2f} m</strong><br>'
+                f'<span style="font-size:10px;color:var(--text-3)">{city["note"]} · Source: {data_source}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if sub_note:
+                st.markdown(sub_note, unsafe_allow_html=True)
+
+            terrain = None
+            if not noaa_station and slr_eff > 0:
+                radius_km = city["radius"]
+                zoom = 13 if radius_km <= 8 else (12 if radius_km <= 20 else 11)
+
+                with st.spinner(f"Loading terrain tiles for {city_name} (cached 30 days)…"):
+                    terrain = fetch_terrain_elevation(city["lat"], city["lon"], zoom=zoom)
+
+                if terrain is None or terrain["tiles"] == 0:
+                    st.warning("Could not load terrain tiles. Check your internet connection and retry.")
+                else:
+                    elev        = terrain["elevation"]
+                    total_px    = elev.size
+                    flooded_px  = int(np.sum((elev > 0) & (elev <= slr_eff)))
+                    below_px    = int(np.sum(elev <= 0))
+                    risk_px     = int(np.sum((elev > slr_eff) & (elev <= slr_eff + 0.5)))
+                    flooded_pct = (flooded_px + below_px) / total_px * 100
+                    px_res_m    = terrain["px_res_m"]
+
+                    c_f1, c_f2, c_f3, c_f4 = st.columns(4)
+                    for col, icon, val, label in [
+                        (c_f1, "🌊", f"+{slr_eff:.2f}m",   "effective SLR at this scenario"),
+                        (c_f2, "📐", f"{flooded_pct:.0f}%", "of mapped area at flood risk"),
+                        (c_f3, "⚠️", f"{risk_px:,}",        "near-risk pixels (next +0.5m)"),
+                        (c_f4, "🔭", f"~{px_res_m:.0f}m",  "terrain pixel resolution"),
+                    ]:
+                        col.markdown(
+                            f'<div class="strip-card" style="padding:10px 12px">'
+                            f'<div class="strip-icon">{icon}</div>'
+                            f'<div class="strip-n" style="font-size:18px">{val}</div>'
+                            f'<div class="strip-l">{label}</div></div>',
+                            unsafe_allow_html=True,
+                        )
+
+            flood_map = make_flood_map(city_name, slr_eff, terrain, noaa_station, noaa_ft)
+            st_folium(flood_map, use_container_width=True, height=520, returned_objects=[])
+
+            st.markdown(
+                '<div class="method-note">'
+                '<strong>Methodology:</strong> US cities use NOAA Digital Coast pre-computed inundation tiles '
+                '(precise surveyed DEMs, ±30cm accuracy). International cities use AWS Terrain Tiles '
+                '(Terrarium format, derived from NASA SRTM 90m) decoded at pixel level — every pixel is '
+                'coloured by its elevation zone relative to the effective SLR threshold. '
+                'Navy = already below sea level · Cyan = flooded at this scenario · Sky = near-term risk (+0.5m). '
+                'SRTM includes building heights so urban flood extent may be slightly underestimated. '
+                'Effective SLR = IPCC AR6 median global SLR + local subsidence since 2024. '
+                'Not suitable for site-specific engineering decisions.</div>',
+                unsafe_allow_html=True,
+            )
 
     # ── TAB 3: Sea Level History ───────────────────────────────────────────────
     with tab3:
