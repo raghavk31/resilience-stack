@@ -606,11 +606,11 @@ def tab_satellite_map() -> None:
     st.markdown("""
     <div class="m-card" style="margin-bottom:.8rem;padding:1rem 1.2rem">
       <div class="m-label">WHAT YOU'RE LOOKING AT</div>
-      <div style="font-size:12px;color:#94a3b8;line-height:1.6;max-width:800px">
-        Real satellite data — NASA MODIS Terra Vegetation Index (NDVI), 250m resolution.
-        <span style="color:#22c55e">Bright green</span> = dense forest &amp; vegetation.
-        <span style="color:#92400e">Brown/dark</span> = cleared land, desert, or urban.
-        Drag the divider to compare two years of forest coverage.
+      <div style="font-size:12px;color:#64748b;line-height:1.6;max-width:800px">
+        Real NASA satellite imagery — MODIS Terra True Color, 250m resolution, June composite.
+        <span style="color:#16a34a;font-weight:600">Deep green</span> = intact forest.
+        <span style="color:#92400e;font-weight:600">Tan/brown</span> = cleared land.
+        Drag the centre divider to reveal the earlier year on the left vs the later year on the right.
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -618,19 +618,16 @@ def tab_satellite_map() -> None:
     col_left, col_right, col_focus = st.columns([2, 2, 2])
     with col_left:
         yr_left  = st.selectbox("Earlier year (left)", COMPARE_YEARS,
-                                index=0, key="yr_l",
-                                help="Drag the map divider left to reveal this year")
+                                index=0, key="yr_l")
     with col_right:
         yr_right = st.selectbox("Later year (right)", COMPARE_YEARS,
-                                index=len(COMPARE_YEARS)-1, key="yr_r",
-                                help="Drag the map divider right to reveal this year")
+                                index=len(COMPARE_YEARS)-1, key="yr_r")
     with col_focus:
         region_name = st.selectbox("Focus region", list(FOREST_REGIONS.keys()),
-                                   index=0, key="focus")
+                                   index=1, key="focus")  # default Amazon
 
     center, zoom = FOREST_REGIONS[region_name]
 
-    # Build Folium map
     m = folium.Map(
         location=center,
         zoom_start=zoom,
@@ -638,83 +635,92 @@ def tab_satellite_map() -> None:
         prefer_canvas=True,
     )
 
-    # Dark base
+    # Neutral light base — visible only where MODIS tiles are missing
     folium.TileLayer(
-        tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        tiles="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
         attr="© CARTO · © OpenStreetMap",
-        name="Dark base",
+        name="Base",
         overlay=False,
         control=False,
     ).add_to(m)
 
-    # NDVI layers for both years — WMTS row/col = {y}/{x} in Leaflet notation
+    # True Color tiles — GIBS WMTS uses {z}/{y}/{x} (TileMatrix/TileRow/TileCol)
     layer_left = folium.TileLayer(
-        tiles=_gibs_ndvi_url(yr_left),
-        attr=f"NASA GIBS MODIS Terra NDVI {yr_left}",
+        tiles=_gibs_truecolor_url(yr_left),
+        attr=f"NASA GIBS MODIS Terra True Color {yr_left}",
         name=str(yr_left),
         overlay=True,
         control=False,
-        opacity=0.92,
+        opacity=1.0,
     )
     layer_right = folium.TileLayer(
-        tiles=_gibs_ndvi_url(yr_right),
-        attr=f"NASA GIBS MODIS Terra NDVI {yr_right}",
+        tiles=_gibs_truecolor_url(yr_right),
+        attr=f"NASA GIBS MODIS Terra True Color {yr_right}",
         name=str(yr_right),
         overlay=True,
         control=False,
-        opacity=0.92,
+        opacity=1.0,
     )
     layer_left.add_to(m)
     layer_right.add_to(m)
 
-    # Side-by-side divider
-    sbs = SideBySideLayers(layer_left=layer_left, layer_right=layer_right)
-    sbs.add_to(m)
+    SideBySideLayers(layer_left=layer_left, layer_right=layer_right).add_to(m)
 
-    # Annotate major forest regions
+    # Forest region pins
     forest_pins = [
-        ([-5, -58],   "🌿 Amazon", "5.5M km² · world's largest tropical forest"),
-        ([-1, 24],    "🌲 Congo",  "3.7M km² · world's second largest tropical forest"),
-        ([1, 115],    "🌴 Borneo", "Most biodiverse forest on Earth"),
-        ([60, 100],   "🌨️ Taiga",  "12M km² · world's largest forest biome"),
-        ([56, -100],  "🍁 Boreal Canada", "3.4M km² of intact boreal forest"),
+        ([-5,  -58], "🌿 Amazon",       "5.5M km² · world's largest tropical forest"),
+        ([-1,   24], "🌲 Congo",        "3.7M km² · world's second largest tropical forest"),
+        ([ 1,  115], "🌴 Borneo",       "Most biodiverse forest on Earth"),
+        ([60,  100], "🌨️ Taiga",        "12M km² · world's largest forest biome"),
+        ([56, -100], "🍁 Boreal Canada","3.4M km² of intact boreal forest"),
     ]
     for loc, title, desc in forest_pins:
         folium.Marker(
             location=loc,
             tooltip=folium.Tooltip(
                 f"<b style='font-size:11px'>{title}</b><br>"
-                f"<span style='font-size:10px;color:#888'>{desc}</span>",
+                f"<span style='font-size:10px;color:#64748b'>{desc}</span>",
                 sticky=False,
             ),
             icon=folium.DivIcon(
-                html=f'<div style="background:#ffffff;border:1px solid #16a34a;color:#16a34a;'
-                     f'font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;'
-                     f'white-space:nowrap;font-family:Inter,sans-serif">{title}</div>',
-                icon_size=(120, 22),
-                icon_anchor=(60, 11),
+                html=f'<div style="background:rgba(255,255,255,0.92);border:1px solid #16a34a;'
+                     f'color:#14532d;font-size:9px;font-weight:700;padding:2px 6px;'
+                     f'border-radius:4px;white-space:nowrap;font-family:Inter,sans-serif;'
+                     f'box-shadow:0 1px 4px rgba(0,0,0,0.15)">{title}</div>',
+                icon_size=(130, 22),
+                icon_anchor=(65, 11),
             ),
         ).add_to(m)
 
-    # Year labels on map edges
+    # Year labels — light theme
     m.get_root().html.add_child(folium.Element(f"""
     <div style="position:absolute;top:16px;left:20px;z-index:1000;
-         background:rgba(11,11,17,0.85);border:1px solid rgba(34,197,94,0.3);
-         color:#22c55e;font-family:Inter,sans-serif;font-size:12px;font-weight:700;
-         padding:4px 10px;border-radius:4px">{yr_left}</div>
+         background:rgba(255,255,255,0.92);border:1px solid rgba(22,163,74,0.4);
+         color:#14532d;font-family:Inter,sans-serif;font-size:13px;font-weight:800;
+         padding:5px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12)">
+      {yr_left}
+    </div>
     <div style="position:absolute;top:16px;right:20px;z-index:1000;
-         background:rgba(11,11,17,0.85);border:1px solid rgba(239,68,68,0.3);
-         color:#ef4444;font-family:Inter,sans-serif;font-size:12px;font-weight:700;
-         padding:4px 10px;border-radius:4px">{yr_right}</div>
+         background:rgba(255,255,255,0.92);border:1px solid rgba(220,38,38,0.4);
+         color:#991b1b;font-family:Inter,sans-serif;font-size:13px;font-weight:800;
+         padding:5px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12)">
+      {yr_right}
+    </div>
+    <div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
+         z-index:1000;background:rgba(255,255,255,0.85);
+         color:#64748b;font-family:Inter,sans-serif;font-size:10px;font-weight:500;
+         padding:3px 10px;border-radius:4px;pointer-events:none">
+      ← drag divider to compare →
+    </div>
     """))
 
-    st_folium(m, height=580, use_container_width=True, returned_objects=[])
+    st_folium(m, height=600, use_container_width=True, returned_objects=[])
 
     st.markdown(f"""
     <div class="method-note">
-      Data: NASA GIBS MODIS Terra Vegetation Indices Monthly 250m · NDVI composite June {yr_left} vs June {yr_right}.
-      Green = vegetation (forest / crops). Brown = bare ground / urban. Drag the divider on the map to compare years.
-      Zoom into the Amazon, Congo Basin, or Borneo to see pixel-level deforestation in detail.
+      NASA GIBS MODIS Terra CorrectedReflectance TrueColor · 250m · June {yr_left} vs June {yr_right}.
+      Zoom into the Amazon, Congo Basin, or Borneo for pixel-level detail.
+      Deep green = dense canopy. Tan/grey = deforested or degraded land.
     </div>
     """, unsafe_allow_html=True)
 
