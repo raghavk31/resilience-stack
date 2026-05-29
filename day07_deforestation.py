@@ -474,104 +474,103 @@ def tab_story(df: pd.DataFrame) -> None:
     lost_this_year  = int(annual_loss_ha * days_elapsed / 365.25)
     lost_mha        = (total_1990 - total_now) * HA_PER_KM2 / 1e6
 
-    # Hero
+    # ── Beat 1: The Scale ─────────────────────────────────────────────────────
     st.markdown(f"""
-    <div class="m-card" style="border-color:rgba(34,197,94,0.15);padding:1.6rem 1.8rem;margin-bottom:1rem">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
+    <div class="s-card" style="border-top:4px solid #16a34a;min-height:auto;padding:1.8rem 2rem;margin-bottom:.6rem">
+      <div class="s-label" style="color:#16a34a;margin-bottom:1.2rem">ACT I — THE SCALE OF WHAT WE'RE LOSING</div>
+      <div style="display:grid;grid-template-columns:1fr 48px 1fr;gap:1rem;align-items:center;margin-bottom:1.4rem">
         <div>
-          <div class="m-label" style="color:#22c55e">EARTH'S FORESTS — {LAST_YEAR}</div>
-          <div style="font-size:3rem;font-weight:900;color:#f0fdf4;line-height:1;letter-spacing:-2px;font-family:'Space Grotesk',sans-serif">
-            {total_now / 1e6:.2f}B ha
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;color:#94a3b8;text-transform:uppercase;margin-bottom:.3rem">1900</div>
+          <div style="font-size:3.4rem;font-weight:900;color:#16a34a;font-family:'Space Grotesk',sans-serif;line-height:1;letter-spacing:-2px">5.9<span style="font-size:1.2rem;font-weight:600;color:#64748b;letter-spacing:0"> Bn ha</span></div>
+          <div style="font-size:.75rem;color:#64748b;margin-top:.3rem">forest covered the Earth</div>
+        </div>
+        <div style="text-align:center;font-size:1.4rem;color:#cbd5e1;padding-top:.8rem">→</div>
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;color:#94a3b8;text-transform:uppercase;margin-bottom:.3rem">TODAY</div>
+          <div style="font-size:3.4rem;font-weight:900;color:#dc2626;font-family:'Space Grotesk',sans-serif;line-height:1;letter-spacing:-2px">{total_now/1e9:.2f}<span style="font-size:1.2rem;font-weight:600;color:#64748b;letter-spacing:0"> Bn ha</span></div>
+          <div style="font-size:.75rem;color:#64748b;margin-top:.3rem">remain — and falling</div>
+        </div>
+      </div>
+      <div style="background:#fef2f2;border:1px solid rgba(220,38,38,0.12);border-radius:6px;padding:.9rem 1.1rem;font-size:.82rem;color:#7f1d1d;line-height:1.65">
+        <b>{lost_mha:.0f} million hectares erased</b> — an area roughly the size of Russia, stripped bare in 120 years.
+        What still stands absorbs a third of humanity's annual CO₂ emissions, regulates rainfall for billions of people,
+        and shelters 80% of all land species. We are burning the infrastructure of life on Earth.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Beat 2 + Beat 3 ───────────────────────────────────────────────────────
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown(f"""
+        <div class="s-card" style="border-top:4px solid #dc2626;min-height:260px;margin-bottom:.6rem">
+          <div class="s-label" style="color:#dc2626">ACT II — IT'S HAPPENING RIGHT NOW</div>
+          <div style="font-size:3rem;font-weight:900;color:#dc2626;font-family:'Space Grotesk',sans-serif;
+               line-height:1;letter-spacing:-1.5px;margin:.5rem 0 .2rem">{loss_per_sec:.1f} ha</div>
+          <div style="font-size:.8rem;font-weight:600;color:#334155;margin-bottom:.9rem">vanishing every second</div>
+          <div style="font-size:.78rem;color:#64748b;line-height:1.7">
+            By the time you finish reading this card,
+            <b style="color:#dc2626">{int(loss_per_sec * 25):,} hectares</b> will have been cleared.
+            <br><br>
+            Since 1 January {datetime.date.today().year}: <b style="color:#dc2626">{lost_this_year:,} ha</b> gone —
+            that's <b>{lost_this_year / 0.714:,.0f} football pitches</b>, this year alone,
+            as of {datetime.date.today().strftime('%b %d')}.
           </div>
-          <div style="font-size:.8rem;color:#4ade80;margin:.3rem 0 .7rem;font-weight:500">of forest remaining on Earth</div>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-            <span style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:4px;padding:3px 10px;font-size:11px;color:#22c55e;font-weight:600">
-              📉 {lost_mha:.0f}M ha lost since 1990
-            </span>
-            <span style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);border-radius:4px;padding:3px 10px;font-size:11px;color:#ef4444;font-weight:600">
-              ⏱ {loss_per_sec:.1f} ha/sec vanishing
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div class="s-card" style="border-top:4px solid #f59e0b;min-height:260px;margin-bottom:.6rem">
+          <div class="s-label" style="color:#d97706">ACT III — THE POINT OF NO RETURN</div>
+          <div style="font-size:3rem;font-weight:900;color:#f59e0b;font-family:'Space Grotesk',sans-serif;
+               line-height:1;letter-spacing:-1.5px;margin:.5rem 0 .2rem">+0.86</div>
+          <div style="font-size:.8rem;font-weight:600;color:#334155;margin-bottom:.9rem">PgC/yr — the Amazon now emits more than it absorbs</div>
+          <div style="font-size:.78rem;color:#64748b;line-height:1.7">
+            For decades the Amazon was Earth's emergency brake on climate change — absorbing
+            carbon even as we burned the rest of the planet. In 2021 that ended.
+            Scientists confirmed the eastern Amazon now <b style="color:#f59e0b">emits 0.86 PgC/yr</b>,
+            driven by fire and fragmentation. The world's largest forest has become part of the problem.
+            <span style="display:block;margin-top:.6rem;font-size:.68rem;color:#94a3b8">
+              Gatti et al. 2021, Nature · doi:10.1038/s41586-021-03629-6
             </span>
           </div>
         </div>
-        <div style="text-align:right">
-          <div class="m-label">LOST IN {datetime.date.today().year} SO FAR</div>
-          <div style="font-size:2.4rem;font-weight:900;color:#ef4444;letter-spacing:-1px;font-family:'Space Grotesk',sans-serif">
-            {lost_this_year:,.0f}
+        """, unsafe_allow_html=True)
+
+    # ── Beat 4: The Fix ───────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="s-card" style="border-top:4px solid #16a34a;min-height:auto;
+         background:linear-gradient(135deg,#f0fdf4 0%,#ffffff 60%);padding:1.8rem 2rem;margin-bottom:.6rem">
+      <div class="s-label" style="color:#16a34a;margin-bottom:.8rem">ACT IV — THE FIX EXISTS. IT'S CHEAPER THAN YOU THINK.</div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:2.5rem;align-items:start">
+        <div>
+          <div style="font-size:3.4rem;font-weight:900;color:#16a34a;font-family:'Space Grotesk',sans-serif;
+               line-height:1;letter-spacing:-2px">$12</div>
+          <div style="font-size:.72rem;color:#64748b;margin-top:.3rem;line-height:1.4">per hectare<br>per year</div>
+        </div>
+        <div style="font-size:.82rem;color:#334155;line-height:1.75">
+          That's what it costs to protect one hectare of tropical forest for a year under REDD+.
+          At a carbon price of $50/tonne — the Paris-aligned floor — a single protected hectare
+          generates <b style="color:#16a34a">$600/yr in credits</b>. The economics work.
+          What's missing is not money. It's political will.
+          <div style="margin-top:.9rem;display:flex;gap:.6rem;flex-wrap:wrap">
+            <span style="background:#dcfce7;border:1px solid rgba(22,163,74,0.2);border-radius:4px;
+                  padding:3px 10px;font-size:11px;color:#15803d;font-weight:600">
+              $12 cost → $600 revenue at $50/t CO₂
+            </span>
+            <span style="background:#fefce8;border:1px solid rgba(202,138,4,0.2);border-radius:4px;
+                  padding:3px 10px;font-size:11px;color:#854d0e;font-weight:600">
+              {total_C:.0f} GtCO₂ locked in standing forests today
+            </span>
           </div>
-          <div style="font-size:10px;color:#475569">ha · as of {datetime.date.today().strftime('%b %d')}</div>
         </div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Story cards — 2 per row, 4 rows
-    cards = [
-        # (accent_color, label, number, number_class, headline, body, viz_html)
-        ("#22c55e", "TREES REMAINING", "3 trillion",    "c-green",
-         "Trees still standing on Earth",
-         "Before farming, Earth held 5.6 trillion trees. We have cut nearly half — "
-         "2.6 trillion gone. What remains stores 45% of all land-surface carbon.",
-         _donut(46, "#dc2626", "#22c55e")),
-
-        ("#ef4444", "ANNUAL CUT", "15 billion",   "c-red",
-         "Trees felled every single year",
-         "We plant 5 billion back. The net loss is 10 billion trees per year — "
-         "a deficit running every year since the 1960s without pause.",
-         _bars([(15, "#ef4444", "Cut"), (5, "#22c55e", "Planted")], 15)),
-
-        ("#f59e0b", "REAL-TIME LOSS", f"{loss_per_sec:.1f} ha/sec",  "c-amber",
-         "Forest disappearing right now",
-         "An area the size of a football pitch lost every two seconds. "
-         "The grid below represents what we've lost since 1990 — one pixel per 2%.",
-         _pixel_grid(46)),
-
-        ("#ef4444", "AMAZON FLIP", "+0.32 PgC/yr", "c-red",
-         "The Amazon crossed its tipping point",
-         "In 2021 scientists confirmed: the eastern Amazon emits +0.86 PgC/yr — "
-         "more than it absorbs. Earth's greatest forest is now a carbon source.",
-         _arrow_flip()),
-
-        ("#60a5fa", "BIODIVERSITY", "80%",          "c-blue",
-         "Of all land species live in forests",
-         "Jaguars, mountain gorillas, thousands of undiscovered plant compounds. "
-         "Forests host 80% of terrestrial biodiversity — each hectare lost, permanently.",
-         _mini_progress(80, "#60a5fa", "80% of terrestrial species")),
-
-        ("#a78bfa", "LIVELIHOODS", "1.6 billion",   "c-purple",
-         "People whose lives depend on forests",
-         "Indigenous communities, smallholder farmers, honey collectors. "
-         "Forests are not wilderness to them — they are home, food, and income.",
-         _mini_progress(20, "#a78bfa", "20% of humanity directly dependent")),
-
-        ("#2dd4bf", "CARBON SHIELD", f"{total_C:.0f} GtCO₂", "c-teal",
-         "Locked in standing trees right now",
-         "More carbon than all fossil fuels burned since the Industrial Revolution. "
-         "Lose these forests and every 1.5°C target becomes unreachable.",
-         _mini_progress(45, "#2dd4bf", "45% of all land carbon stored here")),
-
-        ("#22c55e", "THE SOLUTION", "$12/ha/yr",    "c-green",
-         "What it costs to protect a forest",
-         "REDD+ carbon credits make protecting forests more profitable than clearing them. "
-         "At $50/tonne CO₂, the economics of conservation fully work.",
-         _bars([(50, "#22c55e", "Revenue"), (12, "#475569", "Cost")], 50)),
-    ]
-
-    for i in range(0, len(cards), 2):
-        c1, c2 = st.columns(2)
-        for col, card in zip([c1, c2], cards[i:i+2]):
-            accent, lbl, num, num_cls, headline, body, viz = card
-            col.markdown(f"""
-            <div class="s-card">
-              <div class="s-card-accent" style="background:{accent}"></div>
-              <div class="s-label">{lbl}</div>
-              <div class="s-number {num_cls}">{num}</div>
-              <div class="s-headline">{headline}</div>
-              <div class="s-viz">{viz}</div>
-              <div class="s-body">{body}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Timeline
+    # ── Timeline ──────────────────────────────────────────────────────────────
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     st.markdown('<div class="m-label" style="margin-bottom:.5rem">THE LONG DECLINE — GLOBAL FOREST SINCE 1900</div>',
                 unsafe_allow_html=True)
@@ -580,14 +579,14 @@ def tab_story(df: pd.DataFrame) -> None:
     tf.add_trace(go.Scatter(
         x=trend_df["year"], y=trend_df["gha"],
         mode="lines+markers",
-        line=dict(color="#22c55e", width=2.5),
+        line=dict(color="#16a34a", width=2.5),
         marker=dict(size=7, color="#16a34a", line=dict(color="#ffffff", width=1.5)),
-        fill="tozeroy", fillcolor="rgba(34,197,94,0.06)",
+        fill="tozeroy", fillcolor="rgba(22,163,74,0.08)",
         hovertemplate="<b>%{x}</b><br>%{y:.2f} Gha<extra></extra>",
     ))
     tf.add_annotation(x=2020, y=4.06, text="4.06 Gha today",
-                      font=dict(color="#ef4444", size=10, family="Inter"),
-                      showarrow=True, arrowcolor="#ef4444", arrowwidth=1, arrowhead=2, ax=40, ay=-25)
+                      font=dict(color="#dc2626", size=10, family="Inter"),
+                      showarrow=True, arrowcolor="#dc2626", arrowwidth=1, arrowhead=2, ax=40, ay=-25)
     tf.add_annotation(x=1900, y=5.9, text="5.9 Gha · 1900",
                       font=dict(color="#16a34a", size=10, family="Inter"),
                       showarrow=True, arrowcolor="#16a34a", arrowwidth=1, arrowhead=2, ax=10, ay=-25)
@@ -596,7 +595,7 @@ def tab_story(df: pd.DataFrame) -> None:
                             yaxis=_yax(showgrid=True, title="Billion ha", range=[3.5, 6.3])))
     st.plotly_chart(tf, use_container_width=True)
 
-    st.markdown('<div class="method-note">Forest area: FAO FRA 2020 + Ramankutty & Foley 1999 (pre-1990). Tree count: Crowther et al. 2015 Nature. Amazon: Gatti et al. 2021 Nature. REDD+: Busch et al. 2019 NCC.</div>',
+    st.markdown('<div class="method-note">Forest area: FAO FRA 2020 + Ramankutty &amp; Foley 1999 (pre-1990). Amazon tipping point: Gatti et al. 2021 Nature. REDD+ economics: Busch et al. 2019 NCC.</div>',
                 unsafe_allow_html=True)
 
 
