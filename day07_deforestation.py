@@ -727,6 +727,18 @@ def tab_satellite_map() -> None:
 # ── Tab 3 — Deforestation ─────────────────────────────────────────────────────
 
 def tab_deforestation(df: pd.DataFrame) -> None:
+    st.markdown("""
+    <div class="m-card" style="margin-bottom:.8rem;padding:1rem 1.2rem">
+      <div class="m-label">WHERE THE LOSS IS HAPPENING</div>
+      <div style="font-size:12px;color:#64748b;line-height:1.6;max-width:800px">
+        Top 20 countries by forest loss. Switch between <b>absolute</b> (total km² cleared)
+        and <b>rate</b> (% of original forest lost) to see a different picture —
+        small island nations often rank highest by rate even though large tropical countries
+        dominate by raw area.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     PERIODS = {
         "1990 → 2000": (1990, 2000),
         "2000 → 2010": (2000, 2010),
@@ -753,10 +765,10 @@ def tab_deforestation(df: pd.DataFrame) -> None:
 
     c1, c2, c3, c4 = st.columns(4)
     facts = [
-        (f"{total_km2/1e6:.2f}M km²",   f"Forest lost {period}",       "#ef4444"),
-        (f"{carbon_Gt:.1f} GtCO₂",      "Carbon released equivalent",  "#f59e0b"),
-        (f"{total_km2/242495:.1f}× UK", "Area equivalent",             "#60a5fa"),
-        (f"{ha_day/0.714:,.0f}/day",    "Football pitches lost daily", "#ef4444"),
+        (f"{total_km2/1e6:.2f}M km²",   f"Forest lost {period}",       "#dc2626"),
+        (f"{carbon_Gt:.1f} GtCO₂",      "Carbon released equivalent",  "#d97706"),
+        (f"{total_km2/242495:.1f}× UK", "Area equivalent",             "#2563eb"),
+        (f"{ha_day/0.714:,.0f}/day",    "Football pitches lost daily", "#dc2626"),
     ]
     for col, (val, lbl, color) in zip([c1, c2, c3, c4], facts):
         col.markdown(f'<div class="m-card"><div class="m-label">{lbl}</div>'
@@ -784,14 +796,14 @@ def tab_deforestation(df: pd.DataFrame) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("""
-    <div class="m-card" style="border-color:rgba(239,68,68,0.15)">
-      <div class="m-label" style="color:#ef4444">THE AMAZON TIPPING POINT — 2021</div>
-      <div style="font-size:12px;color:#94a3b8;line-height:1.7">
-        The eastern Amazon now emits <b style="color:#ef4444">+0.86 PgC/yr</b>.
+    <div class="m-card" style="border-color:rgba(220,38,38,0.15);border-left:4px solid #dc2626;border-radius:0 8px 8px 0">
+      <div class="m-label" style="color:#dc2626">THE AMAZON TIPPING POINT — 2021</div>
+      <div style="font-size:12px;color:#475569;line-height:1.8">
+        The eastern Amazon now emits <b style="color:#dc2626">+0.86 PgC/yr</b>.
         The western Amazon is still a sink (−0.54 PgC/yr).
-        Net result: Earth's greatest forest crossed its <b style="color:#f1f5f9">carbon tipping point</b>.
-        59% from fires · 41% from deforestation-driven degradation.
-        <br><span style="font-size:10px;color:#334155">Gatti et al. 2021, Nature · doi:10.1038/s41586-021-03629-6</span>
+        Net result: Earth's greatest forest crossed its <b style="color:#1e293b">carbon tipping point</b>.
+        59% driven by fires · 41% by deforestation-linked degradation.
+        <br><span style="font-size:10px;color:#94a3b8">Gatti et al. 2021, Nature · doi:10.1038/s41586-021-03629-6</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -803,8 +815,17 @@ def tab_deforestation(df: pd.DataFrame) -> None:
 # ── Tab 4 — Solutions ─────────────────────────────────────────────────────────
 
 def tab_solutions(df: pd.DataFrame) -> None:
-    st.markdown('<div class="m-label" style="margin-bottom:.6rem">REDD+ — CAN PROTECTING FORESTS PAY FOR ITSELF?</div>',
-                unsafe_allow_html=True)
+    st.markdown("""
+    <div class="m-card" style="margin-bottom:.8rem;padding:1rem 1.2rem">
+      <div class="m-label">REDD+ — CAN PROTECTING FORESTS PAY FOR ITSELF?</div>
+      <div style="font-size:12px;color:#64748b;line-height:1.6;max-width:800px">
+        REDD+ (Reducing Emissions from Deforestation and Degradation) pays countries
+        a carbon credit for every tonne of CO₂ they keep locked in standing forest.
+        Drag the slider to change the carbon price and see how many countries tip into
+        profit — and how large the net global opportunity becomes.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     price = st.slider("Carbon price ($/tCO₂)", 10, 150, 50, 5, key="t4_price",
                       help="Voluntary market ~$10–30. Policy-aligned: $50–150.")
@@ -827,10 +848,10 @@ def tab_solutions(df: pd.DataFrame) -> None:
 
     c1, c2, c3, c4 = st.columns(4)
     for col, val, lbl, color in [
-        (c1, f"${total_rev:.0f}B/yr",  "REDD+ revenue potential",    "#22c55e"),
-        (c2, f"${total_cost:.0f}B/yr", "Estimated protection cost",  "#f59e0b"),
-        (c3, f"${net:+.0f}B/yr",       "Net at this price",          "#22c55e" if net > 0 else "#ef4444"),
-        (c4, f"{n_profitable}",        "Countries where profitable", "#60a5fa"),
+        (c1, f"${total_rev:.0f}B/yr",  "REDD+ revenue potential",    "#16a34a"),
+        (c2, f"${total_cost:.0f}B/yr", "Estimated protection cost",  "#d97706"),
+        (c3, f"${net:+.0f}B/yr",       "Net at this price",          "#16a34a" if net > 0 else "#dc2626"),
+        (c4, f"{n_profitable}",        "Countries where profitable", "#2563eb"),
     ]:
         col.markdown(f'<div class="m-card"><div class="m-label">{lbl}</div>'
                      f'<div class="m-value" style="color:{color}">{val}</div></div>',
@@ -841,9 +862,9 @@ def tab_solutions(df: pd.DataFrame) -> None:
     top20 = snap.nlargest(20, "co2_Mt").copy()
     bfig  = go.Figure()
     bfig.add_trace(go.Bar(name="REDD+ revenue",   x=top20["country"],
-                          y=top20["revenue_M"],  marker_color="#22c55e"))
+                          y=top20["revenue_M"],  marker_color="#16a34a"))
     bfig.add_trace(go.Bar(name="Protection cost", x=top20["country"],
-                          y=top20["cost_M"],     marker_color="rgba(71,85,105,0.6)"))
+                          y=top20["cost_M"],     marker_color="rgba(148,163,184,0.7)"))
     bfig.update_layout(**_lyt(h=360, margin=dict(l=0, r=0, t=30, b=90),
                               barmode="group",
                               xaxis=_xax(showgrid=False, tickangle=-35),
@@ -859,9 +880,9 @@ def tab_solutions(df: pd.DataFrame) -> None:
                 "break_even": "Break-even ($/tCO₂)"},
         size_max=40, color_discrete_sequence=px.colors.qualitative.Set3,
     )
-    befig.add_hline(y=price, line_dash="dash", line_color="#22c55e",
+    befig.add_hline(y=price, line_dash="dash", line_color="#16a34a",
                     annotation_text=f"${price}/tCO₂",
-                    annotation_font=dict(color="#22c55e", size=10))
+                    annotation_font=dict(color="#16a34a", size=10))
     befig.update_layout(**_lyt(h=360,
                                xaxis=_xax(showgrid=True, type="log",
                                           title="CO₂ saved (MtCO₂/yr, log)"),
@@ -882,7 +903,25 @@ def main() -> None:
     <div class="rs-header">
       <div class="rs-badge">DAY 07 · THE RESILIENCE STACK</div>
       <h1>🌲 Forests & Deforestation</h1>
-      <p>What remains · Where it's going · Real satellite imagery · What would actually help</p>
+      <p style="margin-bottom:1.2rem">What remains · Where it's going · Real satellite imagery · What would actually help</p>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;border-top:1px solid rgba(22,163,74,0.2);padding-top:1rem;margin-top:.2rem">
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#86efac;margin-bottom:.15rem">Forest remaining</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#14532d;font-family:'Space Grotesk',sans-serif;letter-spacing:-1px;line-height:1">4.06 Bn ha</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#86efac;margin-bottom:.15rem">Lost since 1900</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#14532d;font-family:'Space Grotesk',sans-serif;letter-spacing:-1px;line-height:1">1.84 Bn ha</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#86efac;margin-bottom:.15rem">Disappearing</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#991b1b;font-family:'Space Grotesk',sans-serif;letter-spacing:-1px;line-height:1">1 pitch / 2 sec</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#86efac;margin-bottom:.15rem">Carbon locked</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#14532d;font-family:'Space Grotesk',sans-serif;letter-spacing:-1px;line-height:1">861 GtCO₂</div>
+        </div>
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -913,7 +952,7 @@ def main() -> None:
         "<div style='text-align:center;color:#334155;font-size:10px;margin-top:2rem;padding-bottom:1rem'>"
         "Day 07 · The Resilience Stack · "
         "World Bank AG.LND.FRST.ZS/K2 · Pan et al. 2011 · Gatti et al. 2021 · "
-        "NASA GIBS MODIS Terra NDVI · FAO FRA 2020"
+        "NASA GIBS MODIS Terra True Color · FAO FRA 2020"
         "</div>",
         unsafe_allow_html=True,
     )
