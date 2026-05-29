@@ -675,125 +675,145 @@ def tab_story(df: pd.DataFrame) -> None:
 
 # ── Tab 2 — Forest from Space ─────────────────────────────────────────────────
 
+# GFW / Hansen Global Forest Change v1.10 (2000–2022) — standard XYZ tiles
+_GFW_TREE  = "https://storage.googleapis.com/earthenginepartners-hansen/tiles/gfc_v1.10/tree_alpha/{z}/{x}/{y}.png"
+_GFW_LOSS  = "https://storage.googleapis.com/earthenginepartners-hansen/tiles/gfc_v1.10/loss_year/{z}/{x}/{y}.png"
+_GFW_GAIN  = "https://storage.googleapis.com/earthenginepartners-hansen/tiles/gfc_v1.10/gain/{z}/{x}/{y}.png"
+_GFW_ATTR  = "Hansen/UMD/Google/USGS/NASA · <a href='https://www.globalforestwatch.org'>Global Forest Watch</a>"
+
+# ESRI World Imagery — {z}/{y}/{x} (row/col order for REST tile API)
+_ESRI_SAT  = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+_ESRI_ATTR = "Esri, Maxar, Earthstar Geographics"
+
+FOREST_HOTSPOTS = [
+    ([-5,  -58], "🌿 Amazon",        "800k km² lost since 1970 · eastern Amazon now a carbon SOURCE"),
+    ([-8,  -55], "🔥 Pará / Mato Grosso", "Brazil's deforestation frontier — visible herringbone clearings"),
+    ([-1,   24], "🌲 Congo Basin",   "3.7M km² · 600k km² lost 2000–2020 · accelerating since 2016"),
+    ([ 1,  115], "🌴 Borneo",        "67% of original forest gone · palm oil & logging"),
+    ([ 3,  102], "🌱 Peninsula Malaysia", "One of the fastest deforestation rates in SE Asia"),
+    ([60,  100], "🌨️ Siberian Taiga","12M km² · fire + logging · permafrost thaw exposing new areas"),
+]
+
+
 def tab_satellite_map() -> None:
     st.markdown("""
     <div class="m-card" style="margin-bottom:.8rem;padding:1rem 1.2rem">
-      <div class="m-label">WHAT YOU'RE LOOKING AT</div>
-      <div style="font-size:12px;color:#64748b;line-height:1.6;max-width:800px">
-        Real NASA satellite imagery — MODIS Terra True Color, 250m resolution, June composite.
-        <span style="color:#16a34a;font-weight:600">Deep green</span> = intact forest.
-        <span style="color:#92400e;font-weight:600">Tan/brown</span> = cleared land.
-        Drag the centre divider to reveal the earlier year on the left vs the later year on the right.
+      <div class="m-label">HOW TO READ THIS MAP</div>
+      <div style="font-size:12px;color:#64748b;line-height:1.7;max-width:860px">
+        Data: <b style="color:#334155">Hansen / Global Forest Watch</b> — the world's most cited
+        deforestation dataset, used by governments and the IPCC.
+        Toggle layers in the top-right corner of the map.
+        <br>
+        <span style="color:#16a34a;font-weight:600">● Green</span> = forest standing since 2000 baseline &nbsp;·&nbsp;
+        <span style="color:#f97316;font-weight:600">● Orange → red</span> = where it was cut (early 2000s → 2022) &nbsp;·&nbsp;
+        <span style="color:#2563eb;font-weight:600">● Blue</span> = forest that regrew
+        <br>
+        <span style="font-size:11px;color:#94a3b8">
+          Zoom into the Amazon (Pará/Mato Grosso) or Borneo for individual farm-scale clearings.
+          The herringbone pattern in the Amazon is road-driven deforestation — each spine is a logging road.
+        </span>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    col_left, col_right, col_focus = st.columns([2, 2, 2])
-    with col_left:
-        yr_left  = st.selectbox("Earlier year (left)", COMPARE_YEARS,
-                                index=0, key="yr_l")
-    with col_right:
-        yr_right = st.selectbox("Later year (right)", COMPARE_YEARS,
-                                index=len(COMPARE_YEARS)-1, key="yr_r")
-    with col_focus:
-        region_name = st.selectbox("Focus region", list(FOREST_REGIONS.keys()),
-                                   index=1, key="focus")  # default Amazon
-
+    region_name = st.selectbox("Focus region", list(FOREST_REGIONS.keys()),
+                               index=1, key="sat_region")
     center, zoom = FOREST_REGIONS[region_name]
 
-    m = folium.Map(
-        location=center,
-        zoom_start=zoom,
-        tiles=None,
-        prefer_canvas=True,
-    )
+    m = folium.Map(location=center, zoom_start=zoom, tiles=None, prefer_canvas=True)
 
-    # Neutral light base — visible only where MODIS tiles are missing
+    # Base: real satellite photography
     folium.TileLayer(
-        tiles="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
-        attr="© CARTO · © OpenStreetMap",
-        name="Base",
-        overlay=False,
-        control=False,
+        tiles=_ESRI_SAT, attr=_ESRI_ATTR,
+        name="🛰 Satellite imagery",
+        overlay=False, control=True,
     ).add_to(m)
 
-    # True Color tiles — GIBS WMTS uses {z}/{y}/{x} (TileMatrix/TileRow/TileCol)
-    layer_left = folium.TileLayer(
-        tiles=_gibs_truecolor_url(yr_left),
-        attr=f"NASA GIBS MODIS Terra True Color {yr_left}",
-        name=str(yr_left),
-        overlay=True,
-        control=False,
-        opacity=1.0,
-    )
-    layer_right = folium.TileLayer(
-        tiles=_gibs_truecolor_url(yr_right),
-        attr=f"NASA GIBS MODIS Terra True Color {yr_right}",
-        name=str(yr_right),
-        overlay=True,
-        control=False,
-        opacity=1.0,
-    )
-    layer_left.add_to(m)
-    layer_right.add_to(m)
+    # Fallback base labels (only shown if satellite is toggled off)
+    folium.TileLayer(
+        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attr="© CARTO · © OpenStreetMap",
+        name="🗺 Street map",
+        overlay=False, control=True,
+    ).add_to(m)
 
-    SideBySideLayers(layer_left=layer_left, layer_right=layer_right).add_to(m)
+    # GFW tree cover — green where forest stands
+    folium.TileLayer(
+        tiles=_GFW_TREE, attr=_GFW_ATTR,
+        name="🌲 Forest cover (2000 baseline)",
+        overlay=True, control=True, opacity=0.85,
+    ).add_to(m)
 
-    # Forest region pins
-    forest_pins = [
-        ([-5,  -58], "🌿 Amazon",       "5.5M km² · world's largest tropical forest"),
-        ([-1,   24], "🌲 Congo",        "3.7M km² · world's second largest tropical forest"),
-        ([ 1,  115], "🌴 Borneo",       "Most biodiverse forest on Earth"),
-        ([60,  100], "🌨️ Taiga",        "12M km² · world's largest forest biome"),
-        ([56, -100], "🍁 Boreal Canada","3.4M km² of intact boreal forest"),
-    ]
-    for loc, title, desc in forest_pins:
+    # GFW forest loss — color-coded by year of clearing
+    folium.TileLayer(
+        tiles=_GFW_LOSS, attr=_GFW_ATTR,
+        name="🔴 Forest loss 2001–2022 (year-coded)",
+        overlay=True, control=True, opacity=0.9,
+    ).add_to(m)
+
+    # GFW forest gain — blue regrowth pixels
+    folium.TileLayer(
+        tiles=_GFW_GAIN, attr=_GFW_ATTR,
+        name="🔵 Forest gain 2000–2012",
+        overlay=True, control=True, opacity=0.8,
+    ).add_to(m)
+
+    folium.LayerControl(position="topright", collapsed=False).add_to(m)
+
+    # Hotspot markers
+    for loc, title, desc in FOREST_HOTSPOTS:
         folium.Marker(
             location=loc,
             tooltip=folium.Tooltip(
-                f"<b style='font-size:11px'>{title}</b><br>"
-                f"<span style='font-size:10px;color:#64748b'>{desc}</span>",
+                f"<b style='font-size:11px;font-family:Inter,sans-serif'>{title}</b><br>"
+                f"<span style='font-size:10px;color:#64748b;font-family:Inter,sans-serif'>{desc}</span>",
                 sticky=False,
             ),
             icon=folium.DivIcon(
-                html=f'<div style="background:rgba(255,255,255,0.92);border:1px solid #16a34a;'
-                     f'color:#14532d;font-size:9px;font-weight:700;padding:2px 6px;'
+                html=f'<div style="background:rgba(255,255,255,0.95);border:1px solid rgba(22,163,74,0.5);'
+                     f'color:#14532d;font-size:9px;font-weight:700;padding:2px 7px;'
                      f'border-radius:4px;white-space:nowrap;font-family:Inter,sans-serif;'
-                     f'box-shadow:0 1px 4px rgba(0,0,0,0.15)">{title}</div>',
-                icon_size=(130, 22),
-                icon_anchor=(65, 11),
+                     f'box-shadow:0 1px 5px rgba(0,0,0,0.18)">{title}</div>',
+                icon_size=(160, 22), icon_anchor=(80, 11),
             ),
         ).add_to(m)
 
-    # Year labels — light theme
-    m.get_root().html.add_child(folium.Element(f"""
-    <div style="position:absolute;top:16px;left:20px;z-index:1000;
-         background:rgba(255,255,255,0.92);border:1px solid rgba(22,163,74,0.4);
-         color:#14532d;font-family:Inter,sans-serif;font-size:13px;font-weight:800;
-         padding:5px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12)">
-      {yr_left}
-    </div>
-    <div style="position:absolute;top:16px;right:20px;z-index:1000;
-         background:rgba(255,255,255,0.92);border:1px solid rgba(220,38,38,0.4);
-         color:#991b1b;font-family:Inter,sans-serif;font-size:13px;font-weight:800;
-         padding:5px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12)">
-      {yr_right}
-    </div>
-    <div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
-         z-index:1000;background:rgba(255,255,255,0.85);
-         color:#64748b;font-family:Inter,sans-serif;font-size:10px;font-weight:500;
-         padding:3px 10px;border-radius:4px;pointer-events:none">
-      ← drag divider to compare →
+    # Legend
+    m.get_root().html.add_child(folium.Element("""
+    <div style="position:absolute;bottom:30px;left:12px;z-index:1000;
+         background:rgba(255,255,255,0.96);border:1px solid rgba(0,0,0,0.08);
+         border-radius:8px;padding:10px 14px;font-family:Inter,sans-serif;
+         box-shadow:0 2px 10px rgba(0,0,0,0.1);min-width:180px">
+      <div style="font-size:9px;font-weight:700;letter-spacing:.1em;color:#94a3b8;
+                  text-transform:uppercase;margin-bottom:8px">Legend</div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:12px;height:12px;background:#16a34a;border-radius:2px;flex-shrink:0"></div>
+        <span style="font-size:10px;color:#334155">Forest cover (2000 baseline)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+        <div style="width:60px;height:8px;background:linear-gradient(to right,#fde68a,#f97316,#dc2626,#7f1d1d);
+                    border-radius:2px;flex-shrink:0"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;width:60px;margin-left:19px;margin-bottom:5px">
+        <span style="font-size:8px;color:#94a3b8">2001</span>
+        <span style="font-size:8px;color:#94a3b8">2022</span>
+      </div>
+      <div style="font-size:10px;color:#334155;margin-left:19px;margin-bottom:5px">Forest loss (by year)</div>
+      <div style="display:flex;align-items:center;gap:7px">
+        <div style="width:12px;height:12px;background:#2563eb;border-radius:2px;flex-shrink:0"></div>
+        <span style="font-size:10px;color:#334155">Forest gain 2000–2012</span>
+      </div>
     </div>
     """))
 
-    st_folium(m, height=600, use_container_width=True, returned_objects=[])
+    st_folium(m, height=620, use_container_width=True, returned_objects=[])
 
-    st.markdown(f"""
+    st.markdown("""
     <div class="method-note">
-      NASA GIBS MODIS Terra CorrectedReflectance TrueColor · 250m · June {yr_left} vs June {yr_right}.
-      Zoom into the Amazon, Congo Basin, or Borneo for pixel-level detail.
-      Deep green = dense canopy. Tan/grey = deforested or degraded land.
+      Hansen, M. C. et al. 2013 — <i>High-Resolution Global Maps of 21st-Century Forest Cover Change</i>, Science 342.
+      Tree cover: canopy closure >30% at 30m resolution, 2000 baseline.
+      Loss: stand-replacement disturbance 2001–2022. Gain: 2000–2012.
+      Zoom level 6+ recommended for individual clearing detail.
     </div>
     """, unsafe_allow_html=True)
 
