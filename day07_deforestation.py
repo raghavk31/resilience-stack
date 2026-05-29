@@ -702,15 +702,15 @@ def tab_satellite_map() -> None:
       <div style="font-size:12px;color:#64748b;line-height:1.7;max-width:860px">
         Data: <b style="color:#334155">Hansen / Global Forest Watch</b> — the world's most cited
         deforestation dataset, used by governments and the IPCC.
-        Toggle layers in the top-right corner of the map.
         <br>
-        <span style="color:#16a34a;font-weight:600">● Green</span> = forest standing since 2000 baseline &nbsp;·&nbsp;
-        <span style="color:#f97316;font-weight:600">● Orange → red</span> = where it was cut (early 2000s → 2022) &nbsp;·&nbsp;
-        <span style="color:#2563eb;font-weight:600">● Blue</span> = forest that regrew
+        <b style="color:#334155">Drag the centre divider ←→</b> to peel back the forest and reveal the scars:
+        &nbsp;<span style="color:#16a34a;font-weight:600">● Left = forest cover</span> (green, 2000 baseline) &nbsp;·&nbsp;
+        <span style="color:#f97316;font-weight:600">● Right = forest loss</span> (orange→red, year-coded 2001–2022).
+        Toggle extra layers with the ⊞ control in the top-right corner.
         <br>
         <span style="font-size:11px;color:#94a3b8">
-          Zoom into the Amazon (Pará/Mato Grosso) or Borneo for individual farm-scale clearings.
-          The herringbone pattern in the Amazon is road-driven deforestation — each spine is a logging road.
+          Zoom into the Amazon (Pará state) or Borneo for individual farm-scale clearings.
+          The herringbone pattern = road-driven deforestation — each spine is a logging road.
         </span>
       </div>
     </div>
@@ -722,14 +722,13 @@ def tab_satellite_map() -> None:
 
     m = folium.Map(location=center, zoom_start=zoom, tiles=None, prefer_canvas=True)
 
-    # Base: real satellite photography
+    # Base: ESRI satellite — shows on both sides of the divider
     folium.TileLayer(
         tiles=_ESRI_SAT, attr=_ESRI_ATTR,
         name="🛰 Satellite imagery",
         overlay=False, control=True,
     ).add_to(m)
 
-    # Fallback base labels (only shown if satellite is toggled off)
     folium.TileLayer(
         tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
         attr="© CARTO · © OpenStreetMap",
@@ -737,21 +736,23 @@ def tab_satellite_map() -> None:
         overlay=False, control=True,
     ).add_to(m)
 
-    # GFW tree cover — green where forest stands
-    folium.TileLayer(
+    # SBS layers — tree cover left, loss year right
+    layer_tree = folium.TileLayer(
         tiles=_GFW_TREE, attr=_GFW_ATTR,
-        name="🌲 Forest cover (2000 baseline)",
-        overlay=True, control=True, opacity=0.85,
-    ).add_to(m)
-
-    # GFW forest loss — color-coded by year of clearing
-    folium.TileLayer(
-        tiles=_GFW_LOSS, attr=_GFW_ATTR,
-        name="🔴 Forest loss 2001–2022 (year-coded)",
+        name="🌲 Forest cover (left side)",
         overlay=True, control=True, opacity=0.9,
-    ).add_to(m)
+    )
+    layer_loss = folium.TileLayer(
+        tiles=_GFW_LOSS, attr=_GFW_ATTR,
+        name="🔴 Forest loss 2001–2022 (right side)",
+        overlay=True, control=True, opacity=0.95,
+    )
+    layer_tree.add_to(m)
+    layer_loss.add_to(m)
 
-    # GFW forest gain — blue regrowth pixels
+    SideBySideLayers(layer_left=layer_tree, layer_right=layer_loss).add_to(m)
+
+    # Gain as an independent toggle on top
     folium.TileLayer(
         tiles=_GFW_GAIN, attr=_GFW_ATTR,
         name="🔵 Forest gain 2000–2012",
@@ -778,8 +779,20 @@ def tab_satellite_map() -> None:
             ),
         ).add_to(m)
 
-    # Legend
+    # Side labels + legend
     m.get_root().html.add_child(folium.Element("""
+    <div style="position:absolute;top:14px;left:14px;z-index:1000;
+         background:rgba(255,255,255,0.95);border:1px solid rgba(22,163,74,0.4);
+         color:#14532d;font-family:Inter,sans-serif;font-size:11px;font-weight:800;
+         padding:4px 11px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,0.1)">
+      🌲 Forest cover
+    </div>
+    <div style="position:absolute;top:14px;right:14px;z-index:1000;
+         background:rgba(255,255,255,0.95);border:1px solid rgba(249,115,22,0.4);
+         color:#9a3412;font-family:Inter,sans-serif;font-size:11px;font-weight:800;
+         padding:4px 11px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,0.1)">
+      🔴 Forest loss
+    </div>
     <div style="position:absolute;bottom:30px;left:12px;z-index:1000;
          background:rgba(255,255,255,0.96);border:1px solid rgba(0,0,0,0.08);
          border-radius:8px;padding:10px 14px;font-family:Inter,sans-serif;
@@ -791,14 +804,16 @@ def tab_satellite_map() -> None:
         <span style="font-size:10px;color:#334155">Forest cover (2000 baseline)</span>
       </div>
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
-        <div style="width:60px;height:8px;background:linear-gradient(to right,#fde68a,#f97316,#dc2626,#7f1d1d);
+        <div style="width:60px;height:8px;
+                    background:linear-gradient(to right,#fde68a,#f97316,#dc2626,#7f1d1d);
                     border-radius:2px;flex-shrink:0"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;width:60px;margin-left:19px;margin-bottom:5px">
+      <div style="display:flex;justify-content:space-between;width:60px;
+                  margin-left:19px;margin-bottom:5px">
         <span style="font-size:8px;color:#94a3b8">2001</span>
         <span style="font-size:8px;color:#94a3b8">2022</span>
       </div>
-      <div style="font-size:10px;color:#334155;margin-left:19px;margin-bottom:5px">Forest loss (by year)</div>
+      <div style="font-size:10px;color:#334155;margin-left:19px;margin-bottom:5px">Forest loss by year</div>
       <div style="display:flex;align-items:center;gap:7px">
         <div style="width:12px;height:12px;background:#2563eb;border-radius:2px;flex-shrink:0"></div>
         <span style="font-size:10px;color:#334155">Forest gain 2000–2012</span>
