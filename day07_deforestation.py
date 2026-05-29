@@ -1,25 +1,25 @@
 """
-The Resilience Stack — Day 07
+The Resilience Stack — Day 07 (V2 · Beautiful Redesign)
 Deforestation & Carbon Sink Tracker
 
-Sources:
-  World Bank  AG.LND.FRST.ZS / AG.LND.FRST.K2
-  Pan et al. 2011 Science — global forest carbon stocks
-  Gatti et al. 2021 Nature — Amazon carbon flux reversal
-  FAO Global Forest Resources Assessment 2020
-  Busch et al. 2019 Nature Climate Change — REDD+ costs
+Dark glassmorphism · Story cards · Animated forest cartography · Year comparison
+Sources: World Bank AG.LND.FRST.ZS / AG.LND.FRST.K2
+         Pan et al. 2011 Science · Gatti et al. 2021 Nature
+         FAO FRA 2020 · Busch et al. 2019 Nature Climate Change
+         Crowther et al. 2015 Nature (global tree count)
 """
 
 import datetime
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 import requests
 
 st.set_page_config(
-    page_title="Deforestation & Carbon Sink Tracker · Day 07",
-    page_icon="🌳",
+    page_title="Forests · Day 07 · Resilience Stack",
+    page_icon="🌲",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -32,83 +32,277 @@ IND_FOREST_PCT = "AG.LND.FRST.ZS"
 IND_FOREST_KM2 = "AG.LND.FRST.K2"
 
 FIRST_YEAR, LAST_YEAR = 1990, 2021
-TC_TO_TCO2         = 3.667   # tonne C → tonne CO₂ (44/12)
+TC_TO_TCO2         = 3.667
 HA_PER_KM2         = 100.0
-PROTECTION_COST_HA = 12.0    # $/ha/yr — Busch et al. 2019 Nature Climate Change
+PROTECTION_COST_HA = 12.0
 
-# Carbon density tC/ha (above + below ground biomass)
-# Source: Pan et al. 2011 Science doi:10.1126/science.1201609
 CARBON_DENSITY: dict[str, float] = {
-    # Tropical dense
     "BRA": 120, "COD": 175, "IDN": 145, "PER": 165, "COL": 155,
     "VEN": 130, "BOL": 115, "PNG": 170, "MYS": 140, "MMR": 110,
     "CMR": 145, "GAB": 175, "CAF": 150, "GUY": 170, "SUR": 165,
     "COG": 160, "GNQ": 155, "BLZ": 130,
-    # Tropical seasonal / dry
     "TZA":  85, "MOZ":  65, "ZMB":  60, "AGO":  75, "MDG":  90,
     "ETH":  70, "GHA": 100, "CIV": 105, "NGA":  80,
     "MEX":  90, "IND":  60, "THA":  95, "VNM":  90, "KHM": 100,
     "LAO":  95, "PHL":  85, "BGD":  70,
-    # Temperate
     "USA":  65, "FRA":  70, "DEU":  62, "POL":  58, "ESP":  52,
     "ITA":  60, "JPN":  85, "KOR":  70, "CHL":  88, "ARG":  72,
     "AUS":  42, "NZL":  78, "CHN":  52, "TUR":  52, "UKR":  55,
-    "ROU":  65, "BGR":  63,
-    # Boreal
     "CAN":  45, "RUS":  38, "SWE":  46, "FIN":  43, "NOR":  48,
 }
-DEFAULT_CARBON = 75.0   # tC/ha fallback
+DEFAULT_CARBON = 75.0
 
-# Amazon carbon flux (Gatti et al. 2021 Nature doi:10.1038/s41586-021-03629-6)
-AMAZON = {
-    "eastern_source_pgc": 0.86,
-    "western_sink_pgc":   0.54,
-    "net_pgc":            0.32,
-    "fire_pct":           59,
-    "deforest_pct":       41,
-}
+AMAZON = {"eastern_source_pgc": 0.86, "western_sink_pgc": 0.54, "net_pgc": 0.32}
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# Global forest area estimates (Gha) — FAO FRA 2020 + historical reconstructions
+GLOBAL_FOREST_GHA = {1900: 5.9, 1950: 5.5, 1960: 5.4, 1970: 5.2, 1980: 5.0,
+                     1990: 4.28, 2000: 4.17, 2010: 4.10, 2015: 4.07, 2020: 4.06}
+
+# Map years available from World Bank data
+MAP_YEARS = [1990, 1995, 2000, 2005, 2010, 2015, 2020]
+
+
+# ── CSS — Dark Glassmorphism ──────────────────────────────────────────────────
 _CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+/* ── Background ── */
+.stApp {
+    background: linear-gradient(160deg, #060e08 0%, #0a1a0f 45%, #071410 100%);
+}
+[data-testid="stAppViewContainer"],
+[data-testid="stHeader"],
+section.main,
+[data-testid="block-container"] {
+    background: transparent !important;
+}
+
+/* ── Text on dark ── */
+p, li, span, div { color: #e2f5ea; }
+label, .stRadio label span, .stSelectbox label, .stSlider label {
+    color: #86efac !important;
+}
+h1, h2, h3, h4 { color: #f0fdf4; }
+.stMarkdown p { color: #d1fae5; }
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 4px;
+    gap: 2px;
+}
+.stTabs [data-baseweb="tab"] {
+    color: rgba(134,239,172,0.55);
+    border-radius: 10px;
+    padding: 8px 18px;
+    font-weight: 500;
+    font-size: .88rem;
+}
+.stTabs [aria-selected="true"] {
+    background: rgba(74,222,128,0.12) !important;
+    color: #4ade80 !important;
+    font-weight: 600;
+}
+
+/* ── Glass card ── */
+.glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 20px;
+    padding: 1.6rem 1.8rem;
+    color: #f0fdf4;
+    margin-bottom: .6rem;
+}
+.glass-sm {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+    color: #f0fdf4;
+}
+.glass-warn {
+    background: rgba(251,191,36,0.07);
+    border: 1px solid rgba(251,191,36,0.2);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+}
+.glass-crit {
+    background: rgba(248,113,113,0.07);
+    border: 1px solid rgba(248,113,113,0.2);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+}
+
+/* ── Story card ── */
+.story-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 1.8rem 1.6rem;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+.story-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 20px 20px 0 0;
+}
+.story-card.green::before  { background: linear-gradient(90deg, #22c55e, #4ade80); }
+.story-card.amber::before  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.story-card.red::before    { background: linear-gradient(90deg, #ef4444, #f87171); }
+.story-card.blue::before   { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.story-card.purple::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.story-card.teal::before   { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
+
+.story-icon {
+    font-size: 2.2rem;
+    margin-bottom: .8rem;
+    display: block;
+}
+.story-number {
+    font-size: 2.6rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1px;
+    margin-bottom: .3rem;
+}
+.story-number.green  { color: #4ade80; }
+.story-number.amber  { color: #fbbf24; }
+.story-number.red    { color: #f87171; }
+.story-number.blue   { color: #60a5fa; }
+.story-number.purple { color: #a78bfa; }
+.story-number.teal   { color: #2dd4bf; }
+
+.story-headline {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f0fdf4;
+    margin-bottom: .5rem;
+    line-height: 1.3;
+}
+.story-body {
+    font-size: .82rem;
+    color: rgba(209,250,229,.7);
+    line-height: 1.65;
+}
+
+/* ── Stat pill ── */
+.stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: rgba(74,222,128,0.1);
+    border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 999px;
+    padding: .3rem .9rem;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #4ade80;
+    margin: .2rem .15rem;
+}
+.stat-pill.amber {
+    background: rgba(251,191,36,0.1);
+    border-color: rgba(251,191,36,0.2);
+    color: #fbbf24;
+}
+.stat-pill.red {
+    background: rgba(248,113,113,0.1);
+    border-color: rgba(248,113,113,0.2);
+    color: #f87171;
+}
+
+/* ── Progress bar ── */
+.prog-track {
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    height: 6px;
+    margin: .4rem 0 .2rem;
+    overflow: hidden;
+}
+.prog-fill {
+    height: 100%;
+    border-radius: 999px;
+}
+
+/* ── Stat grid ── */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin: .8rem 0; }
+.stat-block { text-align: center; }
+.stat-v { font-size: 1.5rem; font-weight: 800; color: #4ade80; line-height: 1; }
+.stat-l { font-size: .7rem; color: rgba(134,239,172,.65); margin-top: .15rem; }
+
+/* ── Header ── */
 .rs-header {
-    background: linear-gradient(135deg, #052e16 0%, #14532d 55%, #166534 100%);
-    border-radius: 16px; padding: 2rem 2.5rem 1.8rem; color: #fff; margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #0a2a10 0%, #0d3b18 50%, #0a2a10 100%);
+    border: 1px solid rgba(74,222,128,.12);
+    border-radius: 20px;
+    padding: 2rem 2.5rem 1.8rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
 }
-.rs-header h1 { font-size: 2rem; font-weight: 800; margin: 0 0 .25rem; letter-spacing: -.5px; }
-.rs-header p  { font-size: .95rem; color: #bbf7d0; margin: 0; }
+.rs-header::after {
+    content: '🌲';
+    position: absolute;
+    right: 2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 5rem;
+    opacity: .08;
+}
+.rs-header h1 { font-size: 2rem; font-weight: 900; margin: 0 0 .25rem; letter-spacing: -.5px; color: #f0fdf4; }
+.rs-header p  { font-size: .95rem; color: #86efac; margin: 0; }
 .rs-badge {
-    display: inline-block; background: rgba(255,255,255,.12);
-    border-radius: 20px; padding: 2px 12px; font-size: .75rem; font-weight: 600;
-    color: #d1fae5; margin-bottom: .6rem; letter-spacing: .5px;
+    display: inline-block;
+    background: rgba(74,222,128,.12);
+    border: 1px solid rgba(74,222,128,.2);
+    border-radius: 999px;
+    padding: 2px 12px;
+    font-size: .72rem;
+    font-weight: 700;
+    color: #4ade80;
+    margin-bottom: .6rem;
+    letter-spacing: .5px;
 }
 
-.stat-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 1rem 1.2rem; }
-.stat-val  { font-size: 1.6rem; font-weight: 700; color: #14532d; line-height: 1; }
-.stat-lbl  { font-size: .75rem; color: #4b5563; margin-top: .25rem; }
-.stat-card.warn { background: #fff7ed; border-color: #fed7aa; }
-.stat-card.warn .stat-val { color: #9a3412; }
-.stat-card.crit { background: #fef2f2; border-color: #fecaca; }
-.stat-card.crit .stat-val { color: #7f1d1d; }
-
-.amazon-panel {
-    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
-    border-radius: 12px; padding: 1.2rem 1.5rem; color: #fff; margin: 1rem 0;
-}
-.amazon-panel h4 { margin: 0 0 .5rem; font-size: 1rem; font-weight: 700; }
-.amazon-panel p  { margin: 0; font-size: .85rem; color: #fecaca; line-height: 1.6; }
-
+/* ── Method note ── */
 .method-note {
-    background: #f8fafc; border-left: 3px solid #22c55e;
-    padding: .6rem 1rem; border-radius: 0 8px 8px 0;
-    font-size: .78rem; color: #475569; margin-top: 1rem;
+    background: rgba(255,255,255,.03);
+    border-left: 2px solid rgba(74,222,128,.3);
+    padding: .6rem 1rem;
+    border-radius: 0 8px 8px 0;
+    font-size: .75rem;
+    color: rgba(134,239,172,.6);
+    margin-top: 1.2rem;
 }
+
+/* ── Divider ── */
+hr { border-color: rgba(255,255,255,.06) !important; }
+
+/* ── Sidebar hide ── */
 section[data-testid="stSidebar"] { display: none; }
+
+/* ── Select / slider ── */
+[data-testid="stSelectbox"] > div > div,
+[data-baseweb="select"] > div {
+    background: rgba(255,255,255,.06) !important;
+    border-color: rgba(255,255,255,.1) !important;
+    color: #f0fdf4 !important;
+}
+[data-testid="stSlider"] > div { color: #86efac; }
 </style>
 """
+
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
@@ -166,7 +360,6 @@ def _load_wb_series(indicator: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=86_400 * 7, show_spinner=False)
 def load_forest_data() -> pd.DataFrame:
-    """World Bank forest time-series filtered to sovereign countries, with carbon estimates."""
     meta = _load_country_meta()
     km2  = _load_wb_series(IND_FOREST_KM2)
     pct  = _load_wb_series(IND_FOREST_PCT)
@@ -195,379 +388,574 @@ def _net_change(df: pd.DataFrame, y0: int, y1: int) -> pd.DataFrame:
     return m
 
 
-def _card(val: str, lbl: str, cls: str = "") -> str:
-    return (f'<div class="stat-card {cls}">'
-            f'<div class="stat-val">{val}</div>'
-            f'<div class="stat-lbl">{lbl}</div></div>')
+def _prog(pct: float, color: str = "#4ade80") -> str:
+    return (f'<div class="prog-track">'
+            f'<div class="prog-fill" style="width:{min(pct,100):.0f}%;background:{color}"></div>'
+            f'</div>')
 
 
-# ── Tab 1 — Forest Cover Map ──────────────────────────────────────────────────
+def _plotly_dark_layout() -> dict:
+    return dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.02)",
+        font=dict(family="Inter", color="#d1fae5"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.06)", showgrid=True,
+                   zerolinecolor="rgba(255,255,255,0.08)"),
+        yaxis=dict(gridcolor="rgba(255,255,255,0.06)", showgrid=True,
+                   zerolinecolor="rgba(255,255,255,0.08)"),
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
 
-def tab_forest_map(df: pd.DataFrame) -> None:
-    years = sorted(df["year"].unique())
-    year  = st.select_slider("Year", options=years, value=LAST_YEAR, key="t1_year")
 
-    snap = df[df["year"] == year]
-    base = df[df["year"] == FIRST_YEAR]
+# ── Tab 1 — The Story ─────────────────────────────────────────────────────────
 
-    # Compare only countries with data in both years
+def tab_story(df: pd.DataFrame) -> None:
+    snap   = df[df["year"] == LAST_YEAR]
+    base   = df[df["year"] == FIRST_YEAR]
     common = set(snap["iso3"]) & set(base["iso3"])
-    snap_c = snap[snap["iso3"].isin(common)]
-    base_c = base[base["iso3"].isin(common)]
 
-    total_km2_now = snap_c["forest_km2"].sum() / 1e6
-    total_km2_90  = base_c["forest_km2"].sum() / 1e6
-    lost_mha      = (total_km2_90 - total_km2_now) * 100   # million km² → Mha
-    total_carbon  = snap_c["carbon_GtCO2"].sum()
+    total_now  = snap[snap["iso3"].isin(common)]["forest_km2"].sum()
+    total_1990 = base[base["iso3"].isin(common)]["forest_km2"].sum()
+    lost_mha   = (total_1990 - total_now) * HA_PER_KM2 / 1e6
+    total_C    = snap["carbon_GtCO2"].sum()
 
-    chg = snap_c.merge(base_c[["iso3", "forest_km2"]], on="iso3", suffixes=("", "_90"))
-    n_losing = (chg["forest_km2"] < chg["forest_km2_90"]).sum()
-    n_total  = len(chg)
+    annual_loss_km2 = (total_1990 - total_now) / (LAST_YEAR - FIRST_YEAR)
+    annual_loss_ha  = annual_loss_km2 * HA_PER_KM2
+    loss_per_sec    = annual_loss_ha / (365.25 * 86400)
+    days_elapsed    = (datetime.date.today() - datetime.date(datetime.date.today().year, 1, 1)).days
+    lost_this_year  = int(annual_loss_ha * days_elapsed / 365.25)
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(_card(f"{total_km2_now:.1f}M km²", f"Global forest cover {year}"), unsafe_allow_html=True)
-    c2.markdown(_card(f"{lost_mha:,.0f} Mha",
-                      f"Net loss since 1990 (+{year - 1990} yr)",
-                      "crit" if lost_mha > 100 else "warn"), unsafe_allow_html=True)
-    c3.markdown(_card(f"{total_carbon:.0f} GtCO₂", "Carbon stored in forests"), unsafe_allow_html=True)
-    c4.markdown(_card(f"{n_losing} / {n_total}",
-                      "Countries losing forest",
-                      "crit" if n_losing > n_total * 0.55 else "warn"), unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    fig = px.choropleth(
-        snap, locations="iso3",
-        color="forest_pct",
-        color_continuous_scale=["#fefce8", "#86efac", "#22c55e", "#15803d", "#052e16"],
-        range_color=[0, 80],
-        labels={"forest_pct": "Forest cover (%)"},
-        hover_name="country",
-        hover_data={"iso3": False, "forest_km2": ":,.0f", "forest_pct": ":.1f"},
-        title=f"Forest cover by country — {year}",
-    )
-    fig.update_layout(
-        height=480, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        geo=dict(showframe=False, showcoastlines=True, coastlinecolor="#cbd5e1",
-                 bgcolor="rgba(0,0,0,0)", showcountries=True, countrycolor="#e2e8f0",
-                 showocean=True, oceancolor="#e0f2fe"),
-        coloraxis_colorbar=dict(title="Forest %", thickness=12, len=0.55),
-        margin=dict(l=0, r=0, t=40, b=0), font=dict(family="Inter"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("#### Country trend")
-    countries = sorted(snap["country"].dropna().unique())
-    default_idx = countries.index("Brazil") if "Brazil" in countries else 0
-    sel = st.selectbox("Select country", countries, index=default_idx, key="t1_country")
-    cdf = df[df["country"] == sel].sort_values("year")
-    if not cdf.empty:
-        cfig = go.Figure()
-        cfig.add_trace(go.Scatter(
-            x=cdf["year"], y=cdf["forest_km2"] / 1e3,
-            mode="lines+markers", line=dict(color="#22c55e", width=2.5),
-            marker=dict(size=5),
-            hovertemplate="<b>%{x}</b><br>%{y:.1f}k km²<extra></extra>",
-        ))
-        cfig.update_layout(
-            height=260, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False),
-            yaxis=dict(title="Forest area (thousand km²)", gridcolor="#e2e8f0"),
-            margin=dict(l=0, r=0, t=10, b=0), font=dict(family="Inter"), showlegend=False,
-        )
-        st.plotly_chart(cfig, use_container_width=True)
-
-    st.markdown('<div class="method-note">Data: World Bank AG.LND.FRST.ZS / AG.LND.FRST.K2 · FAO Global Forest Resources Assessment · 1990–2021.</div>',
-                unsafe_allow_html=True)
-
-
-# ── Tab 2 — Deforestation Pulse ───────────────────────────────────────────────
-
-def tab_deforestation(df: pd.DataFrame) -> None:
-    PERIODS = {
-        "1990–2000": (1990, 2000),
-        "2000–2010": (2000, 2010),
-        "2010–2021": (2010, 2021),
-        "2000–2021": (2000, 2021),
-    }
-    col_left, col_right = st.columns([2, 2])
-    with col_left:
-        period = st.selectbox("Time period", list(PERIODS.keys()), index=2, key="t2_period")
-    with col_right:
-        view = st.radio("Rank by", ["Absolute loss (km²)", "Relative rate (%)"],
-                        horizontal=True, key="t2_view")
-
-    y0, y1 = PERIODS[period]
-    chg    = _net_change(df, y0, y1)
-    losers = chg[chg["delta_km2"] < 0].copy()
-    losers["abs_loss_km2"] = -losers["delta_km2"]
-    losers["rate_pct"]     = -losers["delta_pct"]
-    n_years                = y1 - y0
-
-    total_lost_km2    = losers["abs_loss_km2"].sum()
-    carbon_lost_GtCO2 = (losers["abs_loss_km2"] * HA_PER_KM2 * losers["cd"] * TC_TO_TCO2 / 1e9).sum()
-
-    c1, c2, c3 = st.columns(3)
-    c1.markdown(_card(f"{total_lost_km2 / 1e6:.2f}M km²", f"Forest lost {period}", "crit"), unsafe_allow_html=True)
-    c2.markdown(_card(f"{carbon_lost_GtCO2:.1f} GtCO₂", "Carbon released equivalent", "warn"), unsafe_allow_html=True)
-    c3.markdown(_card(f"{total_lost_km2 / n_years / 1000:,.0f}k km²/yr", "Average annual rate", "warn"), unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    if view.startswith("Absolute"):
-        top = losers.nlargest(20, "abs_loss_km2").sort_values("abs_loss_km2")
-        x_col, x_lbl, x_fmt = "abs_loss_km2", "Forest lost (km²)", ",.0f"
-    else:
-        top = losers.nlargest(20, "rate_pct").sort_values("rate_pct")
-        x_col, x_lbl, x_fmt = "rate_pct", "Forest lost (% of base)", ".1f"
-
-    fig = px.bar(
-        top, x=x_col, y="country", orientation="h",
-        color=x_col,
-        color_continuous_scale=["#fca5a5", "#ef4444", "#7f1d1d"],
-        labels={x_col: x_lbl, "country": ""},
-        hover_data={"region": True, "abs_loss_km2": ":,.0f", "rate_pct": ":.2f"},
-        text=x_col,
-    )
-    fig.update_traces(texttemplate=f"%{{x:{x_fmt}}}", textposition="outside")
-    fig.update_layout(
-        height=520, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title=x_lbl, gridcolor="#e2e8f0"),
-        yaxis=dict(showgrid=False),
-        coloraxis_showscale=False,
-        margin=dict(l=0, r=80, t=10, b=0), font=dict(family="Inter"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("""
-    <div class="amazon-panel">
-      <h4>🔴 The Amazon Tipping Point</h4>
-      <p>
-        In 2021, researchers measured a threshold crossed: the eastern Amazon now <strong>emits</strong>
-        more CO₂ than it absorbs — releasing +0.86 PgC/yr. The western Amazon is still a sink
-        (−0.54 PgC/yr), but the net result is that the world's largest rainforest has flipped from
-        carbon absorber to carbon source. 59% of the flux comes from fires, 41% from
-        deforestation-driven forest degradation.<br><br>
-        <em>Gatti et al. 2021, Nature — doi:10.1038/s41586-021-03629-6</em>
-      </p>
+    # ── Hero ──────────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="glass" style="margin-bottom:1.2rem;background:linear-gradient(135deg,rgba(22,101,52,0.18),rgba(10,26,15,0.4))">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
+        <div>
+          <div style="font-size:.75rem;font-weight:700;letter-spacing:.1em;color:#4ade80;margin-bottom:.4rem">
+            EARTH'S FORESTS — {LAST_YEAR} SNAPSHOT
+          </div>
+          <div style="font-size:3.2rem;font-weight:900;color:#f0fdf4;line-height:1;letter-spacing:-2px">
+            {total_now / 1e6:.2f}B
+          </div>
+          <div style="font-size:1rem;color:#86efac;margin-top:.2rem">hectares of forest remaining</div>
+          <div style="margin-top:.8rem">
+            <span class="stat-pill">🌍 Down from {total_1990/1e6:.2f}B ha in 1990</span>
+            <span class="stat-pill amber">⬇ {lost_mha:.0f}M ha lost since 1990</span>
+            <span class="stat-pill red">🔥 {loss_per_sec:.1f} ha vanishing per second</span>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:.72rem;color:rgba(134,239,172,.5);margin-bottom:.3rem">LOST SO FAR THIS YEAR</div>
+          <div style="font-size:2.4rem;font-weight:900;color:#f87171;letter-spacing:-1px">{lost_this_year:,.0f}</div>
+          <div style="font-size:.78rem;color:rgba(134,239,172,.5)">hectares · as of {datetime.date.today().strftime('%b %d, %Y')}</div>
+        </div>
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="method-note">Deforestation = change in World Bank forest area between period endpoints. Carbon released = area lost × carbon density (Pan et al. 2011 Science).</div>',
+    # ── Story cards grid ──────────────────────────────────────────────────────
+    cards = [
+        ("green",  "🌲", "3 trillion",      "Trees still standing",
+         "Before farming and cities began, Earth had an estimated 5.6 trillion trees. "
+         "We've cut down nearly half — 2.6 trillion gone. What remains stores 45% of all carbon on land.",
+         46),
+        ("amber",  "🪓", "15 billion",      "Trees cut every single year",
+         "We plant 5 billion back. Net loss: 10 billion trees per year — enough to circle "
+         "the equator more than 100 times, laid end to end. Every year.",
+         None),
+        ("red",    "⏱️", f"{loss_per_sec:.1f} ha/sec", "Forest disappearing right now",
+         "An area the size of a football pitch lost every two seconds. "
+         "By the time you finish reading this card, another 30 hectares will be gone — permanently.",
+         None),
+        ("red",    "🔄", "+0.32 PgC/yr",   "The Amazon has flipped",
+         "In 2021, scientists confirmed it: the eastern Amazon now emits more CO₂ than it absorbs. "
+         "Earth's largest rainforest — once a vital carbon sink — crossed its tipping point.",
+         None),
+        ("blue",   "🦜", "80%",             "Of land species live in forests",
+         "Forests host 80% of all terrestrial biodiversity. Each species lost to deforestation "
+         "is gone forever — including thousands of plants with undiscovered medicinal properties.",
+         80),
+        ("purple", "👨‍👩‍👧", "1.6 billion",     "People whose lives depend on forests",
+         "Indigenous communities, smallholder farmers, timber workers, honey collectors. "
+         "Forests are not wilderness to them — they are home, food, income, and identity.",
+         None),
+        ("teal",   "🛡️", f"{total_C:.0f} GtCO₂", "Locked away in standing trees",
+         "More carbon than all fossil fuels burned since the Industrial Revolution. "
+         "Lose these forests and every climate target — Paris, net zero, 1.5°C — becomes unreachable.",
+         None),
+        ("green",  "✅", "$12/ha/yr",       "What it costs to protect a forest",
+         "REDD+ carbon credits can make protecting forests more profitable than clearing them. "
+         "At $50/tonne CO₂, protection pays for itself — the economics of conservation finally work.",
+         None),
+    ]
+
+    for i in range(0, len(cards), 2):
+        cols = st.columns(2)
+        for j, col in enumerate(cols):
+            if i + j >= len(cards):
+                break
+            acc, icon, num, headline, body, pct = cards[i + j]
+            prog_html = _prog(pct, "#4ade80" if acc == "green" else "#f87171") if pct else ""
+            col.markdown(f"""
+            <div class="story-card {acc}">
+              <span class="story-icon">{icon}</span>
+              <div class="story-number {acc}">{num}</div>
+              <div class="story-headline">{headline}</div>
+              <div class="story-body">{body}</div>
+              {prog_html}
+              {'<div style="font-size:.7rem;color:rgba(134,239,172,.45);margin-top:.3rem">' + str(pct) + '% gone since civilisation began</div>' if pct else ''}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Global trend timeline ─────────────────────────────────────────────────
+    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+    st.markdown('<div style="font-size:.72rem;font-weight:700;letter-spacing:.12em;color:#4ade80;margin-bottom:.8rem">THE LONG VIEW — GLOBAL FOREST AREA SINCE 1900</div>',
+                unsafe_allow_html=True)
+
+    trend_df = pd.DataFrame(list(GLOBAL_FOREST_GHA.items()), columns=["year", "forest_Gha"])
+    tfig = go.Figure()
+    tfig.add_trace(go.Scatter(
+        x=trend_df["year"], y=trend_df["forest_Gha"],
+        mode="lines+markers",
+        line=dict(color="#4ade80", width=3),
+        marker=dict(size=8, color="#4ade80"),
+        fill="tozeroy",
+        fillcolor="rgba(74,222,128,0.07)",
+        hovertemplate="<b>%{x}</b><br>%{y:.2f} billion hectares<extra></extra>",
+    ))
+    tfig.add_annotation(x=2020, y=4.06, text="4.06 Gha today",
+                        font=dict(color="#f87171", size=11), showarrow=True,
+                        arrowcolor="#f87171", arrowwidth=1.5, arrowhead=2,
+                        ax=40, ay=-30)
+    tfig.add_annotation(x=1900, y=5.9, text="5.9 Gha in 1900",
+                        font=dict(color="#4ade80", size=11), showarrow=True,
+                        arrowcolor="#4ade80", arrowwidth=1.5, arrowhead=2,
+                        ax=-10, ay=-30)
+    layout = _plotly_dark_layout()
+    layout.update(height=280,
+                  xaxis=dict(**layout.get("xaxis", {}), title="", showgrid=False),
+                  yaxis=dict(**layout.get("yaxis", {}), title="Global forest (billion ha)",
+                             range=[3.5, 6.2]))
+    tfig.update_layout(**layout)
+    st.plotly_chart(tfig, use_container_width=True)
+
+    st.markdown('<div class="method-note">Forest area: FAO Global Forest Resources Assessment 2020 + historical reconstructions (Ramankutty & Foley 1999 for pre-1990). Tree count: Crowther et al. 2015 Nature. Amazon flux: Gatti et al. 2021 Nature. REDD+ cost: Busch et al. 2019 Nature Climate Change.</div>',
                 unsafe_allow_html=True)
 
 
-# ── Tab 3 — Carbon Sink Status ────────────────────────────────────────────────
+# ── Tab 2 — Forest Cartography ────────────────────────────────────────────────
 
-def tab_carbon_status(df: pd.DataFrame) -> None:
-    snap = df[df["year"] == LAST_YEAR].copy()
-    base = df[df["year"] == FIRST_YEAR][["iso3", "forest_km2"]].rename(columns={"forest_km2": "km2_1990"})
-    snap = snap.merge(base, on="iso3", how="left")
-    snap["annual_loss_km2"] = ((snap["km2_1990"] - snap["forest_km2"]) / (LAST_YEAR - FIRST_YEAR)).clip(lower=0)
-    snap["forest_Mha"]      = snap["forest_km2"] * HA_PER_KM2 / 1e6
-
-    total_C         = snap["carbon_GtCO2"].sum()
-    annual_rel      = (snap["annual_loss_km2"] * HA_PER_KM2 * snap["cd"] * TC_TO_TCO2 / 1e9).sum()
-    at_risk_2050    = annual_rel * (2050 - LAST_YEAR)
-    trees_per_sec   = snap["annual_loss_km2"].sum() * HA_PER_KM2 * 400 / (365.25 * 86400)
-
-    c1, c2, c3 = st.columns(3)
-    c1.markdown(_card(f"{total_C:.0f} GtCO₂", "Carbon stored in all forests"), unsafe_allow_html=True)
-    c2.markdown(_card(f"{at_risk_2050:.0f} GtCO₂", "At risk by 2050 (current trend)", "crit"), unsafe_allow_html=True)
-    c3.markdown(_card(f"~{trees_per_sec:.0f} / sec", "Trees lost at 1990–2021 rate", "warn"), unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # Bubble scatter: forest size vs carbon density vs total carbon
-    plot_df = snap[(snap["forest_Mha"] > 0.05) & (snap["carbon_GtCO2"] > 0.01)].copy()
-    plot_df["trend"] = plot_df["annual_loss_km2"].apply(
-        lambda x: "Gaining / stable" if x < 20 else ("Moderate loss" if x < 300 else "Rapid loss"))
-
-    bfig = px.scatter(
-        plot_df, x="forest_Mha", y="cd", size="carbon_GtCO2",
-        color="trend",
-        color_discrete_map={"Gaining / stable": "#22c55e", "Moderate loss": "#f59e0b", "Rapid loss": "#ef4444"},
-        hover_name="country",
-        hover_data={"iso3": False, "carbon_GtCO2": ":.2f", "forest_Mha": ":.1f", "cd": ":.0f"},
-        labels={"forest_Mha": "Forest area (Mha)", "cd": "Carbon density (tC/ha)",
-                "carbon_GtCO2": "Carbon (GtCO₂)"},
-        size_max=65, title="Forest Carbon Stores — bubble size = total carbon stored",
+def tab_forest_map(df: pd.DataFrame) -> None:
+    view = st.radio(
+        "View mode",
+        ["📅 Year explorer", "⬅️ Before & after", "📊 Net change 1990 → 2020"],
+        horizontal=True, key="t2_view",
     )
-    bfig.update_layout(
-        height=440, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(type="log", title="Forest area (Mha, log scale)", gridcolor="#e2e8f0"),
-        yaxis=dict(title="Carbon density (tC/ha)", gridcolor="#e2e8f0"),
-        legend=dict(orientation="h", y=1.06), font=dict(family="Inter"),
-        margin=dict(l=0, r=0, t=40, b=0),
-    )
-    st.plotly_chart(bfig, use_container_width=True)
 
-    # Amazon flip split view
-    st.markdown("#### The Amazon Carbon Flip")
-    cola, colb = st.columns([2, 3])
+    if view.startswith("📅"):
+        # ── Single year choropleth with year slider ────────────────────────
+        year = st.select_slider(
+            "Slide through time",
+            options=MAP_YEARS,
+            value=2020,
+            key="t2_year",
+            format_func=lambda y: f"🌍  {y}",
+        )
+        snap_y = df[df["year"] == year]
+        total_Gha = snap_y["forest_km2"].sum() * HA_PER_KM2 / 1e9
+        base_y    = df[df["year"] == 1990]
+        total_90  = base_y["forest_km2"].sum() * HA_PER_KM2 / 1e9
+        lost_pct  = (total_90 - total_Gha) / total_90 * 100 if total_90 > 0 else 0
 
-    with cola:
+        c1, c2, c3 = st.columns(3)
+        for col, val, lbl in [
+            (c1, f"{total_Gha:.2f} Gha", f"Global forest cover {year}"),
+            (c2, f"−{(total_90 - total_Gha):.2f} Gha", f"Lost vs 1990 baseline"),
+            (c3, f"{lost_pct:.1f}%", f"Of 1990 forest gone by {year}"),
+        ]:
+            col.markdown(f'<div class="glass-sm"><div style="font-size:1.5rem;font-weight:800;color:#4ade80">{val}</div><div style="font-size:.73rem;color:rgba(134,239,172,.6);margin-top:.2rem">{lbl}</div></div>',
+                         unsafe_allow_html=True)
+
+        fig = _make_forest_choropleth(snap_y, year)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Country trend
+        st.markdown('<div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:#4ade80;margin:.8rem 0 .4rem">COUNTRY TREND</div>',
+                    unsafe_allow_html=True)
+        countries = sorted(df["country"].dropna().unique())
+        sel = st.selectbox("", countries,
+                           index=countries.index("Brazil") if "Brazil" in countries else 0,
+                           key="t2_country", label_visibility="collapsed")
+        _render_country_trend(df, sel)
+
+    elif view.startswith("⬅️"):
+        # ── Side-by-side before/after ──────────────────────────────────────
+        col_l, col_r = st.columns(2)
+        with col_l:
+            y_a = st.selectbox("Earlier year", MAP_YEARS, index=0, key="ya")
+        with col_r:
+            y_b = st.selectbox("Later year", MAP_YEARS, index=len(MAP_YEARS)-1, key="yb")
+
+        snap_a = df[df["year"] == y_a]
+        snap_b = df[df["year"] == y_b]
+
+        fig = make_subplots(rows=1, cols=2,
+                            subplot_titles=[f"🌍 {y_a}", f"🌍 {y_b}"],
+                            specs=[[{"type": "choropleth"}, {"type": "choropleth"}]])
+
+        for col_idx, (snap, yr) in enumerate([(snap_a, y_a), (snap_b, y_b)], 1):
+            fig.add_trace(
+                go.Choropleth(
+                    locations=snap["iso3"], z=snap["forest_pct"],
+                    colorscale=[
+                        [0.00, "#4a3728"], [0.15, "#7d6235"],
+                        [0.30, "#6b8e4e"], [0.55, "#2d7d2d"],
+                        [0.80, "#166016"], [1.00, "#0a3d0a"],
+                    ],
+                    zmin=0, zmax=80,
+                    showscale=(col_idx == 2),
+                    colorbar=dict(title="Forest %", thickness=10, len=0.6,
+                                  tickfont=dict(color="#86efac"), title_font=dict(color="#86efac"))
+                    if col_idx == 2 else None,
+                    marker_line_color="rgba(255,255,255,0.06)",
+                    marker_line_width=0.4,
+                    hovertemplate="<b>%{location}</b><br>Forest: %{z:.1f}%<extra></extra>",
+                ),
+                row=1, col=col_idx,
+            )
+
+        fig.update_geos(
+            showframe=False, showcoastlines=True, coastlinecolor="rgba(255,255,255,0.1)",
+            bgcolor="rgba(0,0,0,0)", showcountries=True, countrycolor="rgba(255,255,255,0.06)",
+            showocean=True, oceancolor="#081629",
+            showlakes=False, showrivers=False,
+            projection_type="natural earth",
+        )
+        fig.update_layout(
+            height=460, paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter", color="#d1fae5"),
+            margin=dict(l=0, r=0, t=40, b=0),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Delta stats
+        common = set(snap_a["iso3"]) & set(snap_b["iso3"])
+        a_tot = snap_a[snap_a["iso3"].isin(common)]["forest_km2"].sum()
+        b_tot = snap_b[snap_b["iso3"].isin(common)]["forest_km2"].sum()
+        delta_Mha = (b_tot - a_tot) * HA_PER_KM2 / 1e6
+        delta_pct = (b_tot - a_tot) / a_tot * 100
+
+        colour = "#f87171" if delta_Mha < 0 else "#4ade80"
         st.markdown(f"""
-        <div class="amazon-panel">
-          <h4>Was a sink. Now a source.</h4>
-          <p>
-            <strong>Eastern Amazon</strong><br>
-            +{AMAZON['eastern_source_pgc']} PgC/yr (carbon source)<br><br>
-            <strong>Western Amazon</strong><br>
-            −{AMAZON['western_sink_pgc']} PgC/yr (still a sink)<br><br>
-            <strong>Net Amazon flux</strong><br>
-            +{AMAZON['net_pgc']} PgC/yr — net source<br><br>
-            {AMAZON['fire_pct']}% from fires · {AMAZON['deforest_pct']}% from land degradation<br><br>
-            <em>Gatti et al. 2021, Nature</em>
-          </p>
+        <div class="glass-sm" style="text-align:center;margin-top:.6rem">
+          <span style="font-size:2rem;font-weight:900;color:{colour}">{delta_Mha:+.0f} Mha</span>
+          <span style="font-size:.85rem;color:rgba(134,239,172,.6);margin-left:.5rem">
+            ({delta_pct:+.1f}%) between {y_a} and {y_b}
+          </span>
         </div>
         """, unsafe_allow_html=True)
 
-    with colb:
-        afig = go.Figure(go.Bar(
-            x=["Eastern Amazon\n(source)", "Western Amazon\n(sink)", "Net Amazon"],
-            y=[AMAZON["eastern_source_pgc"], -AMAZON["western_sink_pgc"], AMAZON["net_pgc"]],
-            marker_color=["#ef4444", "#22c55e", "#f59e0b"],
-            text=[f"+{AMAZON['eastern_source_pgc']} PgC/yr",
-                  f"−{AMAZON['western_sink_pgc']} PgC/yr",
-                  f"+{AMAZON['net_pgc']} PgC/yr"],
-            textposition="outside",
-        ))
-        afig.update_layout(
-            height=300, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            yaxis=dict(title="Carbon flux (PgC/yr)", gridcolor="#e2e8f0",
-                       zeroline=True, zerolinecolor="#94a3b8", zerolinewidth=2),
-            xaxis=dict(showgrid=False),
-            margin=dict(l=0, r=0, t=10, b=60), font=dict(family="Inter"),
-            showlegend=False,
+    else:
+        # ── Net change choropleth 1990→2020 ───────────────────────────────
+        chg = _net_change(df, 1990, 2020)
+        chg["change_label"] = chg["delta_pct"].apply(
+            lambda x: "Large gain (>10%)" if x > 10
+            else ("Moderate gain" if x > 2
+                  else ("Stable (±2%)" if x > -2
+                        else ("Moderate loss" if x > -10
+                              else "Large loss (>10%)"))))
+
+        fig = px.choropleth(
+            chg, locations="iso3", color="delta_pct",
+            color_continuous_scale=[
+                [0.0,  "#7f1d1d"],
+                [0.25, "#c2410c"],
+                [0.42, "#6b7280"],
+                [0.6,  "#166534"],
+                [1.0,  "#052e16"],
+            ],
+            range_color=[-25, 15],
+            hover_name="country",
+            hover_data={"iso3": False, "delta_pct": ":.1f", "delta_km2": ":,.0f"},
+            labels={"delta_pct": "Change (%)"},
+            title="Net forest change 1990 → 2020",
         )
-        st.plotly_chart(afig, use_container_width=True)
+        _style_geo(fig)
+        fig.update_layout(
+            height=500, paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter", color="#d1fae5"),
+            coloraxis_colorbar=dict(
+                title="Change %", thickness=12, len=0.6,
+                tickvals=[-25, -10, -2, 0, 10, 15],
+                ticktext=["−25 Large loss", "−10", "−2", "0", "+10", "+15 Gain"],
+                tickfont=dict(color="#86efac"),
+                title_font=dict(color="#86efac"),
+            ),
+            margin=dict(l=0, r=0, t=40, b=0),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Cumulative CO₂ at risk projection
-    st.markdown("#### Carbon at Risk — Projection to 2050")
-    proj_years = list(range(LAST_YEAR, 2051))
-    cumulative = [(y - LAST_YEAR) * annual_rel for y in proj_years]
+        # Biggest losers & gainers callout
+        losers  = chg.nsmallest(5, "delta_pct")[["country", "delta_pct", "delta_km2"]]
+        gainers = chg.nlargest(5, "delta_pct")[["country", "delta_pct", "delta_km2"]]
 
-    pfig = go.Figure()
-    pfig.add_trace(go.Scatter(
-        x=proj_years, y=cumulative, mode="lines", fill="tozeroy",
-        line=dict(color="#ef4444", width=2),
-        fillcolor="rgba(239,68,68,0.12)",
-        hovertemplate="<b>%{x}</b><br>%{y:.1f} GtCO₂ released<extra></extra>",
-    ))
-    pfig.add_vline(x=datetime.date.today().year, line_dash="dot", line_color="#64748b",
-                   annotation_text="Today", annotation_position="top right")
-    pfig.update_layout(
-        height=260, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False),
-        yaxis=dict(title="Cumulative CO₂ released (GtCO₂)", gridcolor="#e2e8f0"),
-        margin=dict(l=0, r=0, t=10, b=0), font=dict(family="Inter"), showlegend=False,
-    )
-    st.plotly_chart(pfig, use_container_width=True)
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.markdown('<div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:#f87171;margin-bottom:.5rem">BIGGEST LOSSES 1990→2020</div>',
+                        unsafe_allow_html=True)
+            for _, row in losers.iterrows():
+                st.markdown(f'<div class="glass-crit" style="margin-bottom:.4rem"><b style="color:#f87171">{row.country}</b> &nbsp;<span style="color:rgba(209,250,229,.5);font-size:.8rem">{row.delta_pct:.1f}% · {row.delta_km2/1000:,.0f}k km²</span></div>',
+                            unsafe_allow_html=True)
+        with col_r:
+            st.markdown('<div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:#4ade80;margin-bottom:.5rem">BIGGEST GAINS 1990→2020</div>',
+                        unsafe_allow_html=True)
+            for _, row in gainers.iterrows():
+                st.markdown(f'<div class="glass-sm" style="margin-bottom:.4rem"><b style="color:#4ade80">{row.country}</b> &nbsp;<span style="color:rgba(209,250,229,.5);font-size:.8rem">+{row.delta_pct:.1f}% · +{row.delta_km2/1000:,.0f}k km²</span></div>',
+                            unsafe_allow_html=True)
 
-    st.markdown('<div class="method-note">Carbon stored = forest area × carbon density (Pan et al. 2011 Science). At-risk projection assumes 1990–2021 average deforestation rate continues unchanged to 2050. Amazon flux data from Gatti et al. 2021 Nature.</div>',
+    st.markdown('<div class="method-note">Forest cover: World Bank AG.LND.FRST.ZS / AG.LND.FRST.K2 · FAO Global Forest Resources Assessment · satellite-era data 1990–2020. Color scale: brown = low cover, deep green = dense forest, navy = ocean.</div>',
                 unsafe_allow_html=True)
 
 
-# ── Tab 4 — REDD+ Economics ───────────────────────────────────────────────────
-
-def tab_redd_economics(df: pd.DataFrame) -> None:
-    carbon_price = st.slider(
-        "Carbon price ($/tCO₂)", min_value=10, max_value=150, value=50, step=5, key="t4_price",
-        help="Voluntary carbon market ~$10–30; Paris-aligned policy $50–150",
+def _make_forest_choropleth(snap: pd.DataFrame, year: int) -> go.Figure:
+    fig = px.choropleth(
+        snap, locations="iso3", color="forest_pct",
+        color_continuous_scale=[
+            [0.00, "#4a3728"],
+            [0.10, "#7d6235"],
+            [0.25, "#8aad5a"],
+            [0.45, "#4a8a3a"],
+            [0.70, "#206020"],
+            [1.00, "#0a3d0a"],
+        ],
+        range_color=[0, 80],
+        hover_name="country",
+        hover_data={"iso3": False, "forest_km2": ":,.0f", "forest_pct": ":.1f"},
+        labels={"forest_pct": "Forest cover (%)"},
+        title=f"Forest cover of land area — {year}",
     )
+    _style_geo(fig)
+    fig.update_layout(
+        height=500, paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter", color="#d1fae5"),
+        coloraxis_colorbar=dict(
+            title="Forest %", thickness=12, len=0.6,
+            tickvals=[0, 10, 20, 40, 60, 80],
+            ticktext=["0", "10%", "20%", "40%", "60%", "80% dense"],
+            tickfont=dict(color="#86efac"),
+            title_font=dict(color="#86efac"),
+        ),
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+    return fig
+
+
+def _style_geo(fig: go.Figure) -> None:
+    fig.update_geos(
+        showframe=False, showcoastlines=True, coastlinecolor="rgba(255,255,255,0.12)",
+        bgcolor="rgba(0,0,0,0)", showcountries=True, countrycolor="rgba(255,255,255,0.07)",
+        showocean=True, oceancolor="#081629",
+        showlakes=True, lakecolor="#0c1e35",
+        showrivers=False, showland=True, landcolor="#2a2118",
+        projection_type="natural earth",
+    )
+
+
+def _render_country_trend(df: pd.DataFrame, country: str) -> None:
+    cdf = df[df["country"] == country].sort_values("year")
+    if cdf.empty:
+        return
+    cfig = go.Figure()
+    cfig.add_trace(go.Scatter(
+        x=cdf["year"], y=cdf["forest_km2"] / 1e3,
+        mode="lines+markers",
+        line=dict(color="#4ade80", width=2.5),
+        marker=dict(size=6, color="#4ade80"),
+        fill="tozeroy",
+        fillcolor="rgba(74,222,128,0.06)",
+        hovertemplate="<b>%{x}</b><br>%{y:.1f}k km²<extra></extra>",
+    ))
+    layout = _plotly_dark_layout()
+    layout.update(
+        height=240, title=dict(text=f"{country} — forest area trend", font=dict(size=13, color="#86efac")),
+        yaxis=dict(**layout.get("yaxis", {}), title="Forest (thousand km²)"),
+        xaxis=dict(**layout.get("xaxis", {}), showgrid=False),
+    )
+    cfig.update_layout(**layout)
+    st.plotly_chart(cfig, use_container_width=True)
+
+
+# ── Tab 3 — Deforestation ─────────────────────────────────────────────────────
+
+def tab_deforestation(df: pd.DataFrame) -> None:
+    PERIODS = {
+        "1990 → 2000": (1990, 2000),
+        "2000 → 2010": (2000, 2010),
+        "2010 → 2020": (2010, 2020),
+        "All time (1990 → 2020)": (1990, 2020),
+    }
+    col_l, col_r = st.columns([2, 2])
+    with col_l:
+        period = st.selectbox("Time period", list(PERIODS.keys()), index=2, key="t3_period")
+    with col_r:
+        view = st.radio("Rank by", ["Absolute loss (km²)", "Rate (% of forest)"],
+                        horizontal=True, key="t3_view")
+
+    y0, y1   = PERIODS[period]
+    chg      = _net_change(df, y0, y1)
+    losers   = chg[chg["delta_km2"] < 0].copy()
+    losers["abs_loss"] = -losers["delta_km2"]
+    losers["rate"]     = -losers["delta_pct"]
+    n_years  = y1 - y0
+
+    total_km2  = losers["abs_loss"].sum()
+    carbon_Gt  = (losers["abs_loss"] * HA_PER_KM2 * losers["cd"] * TC_TO_TCO2 / 1e9).sum()
+    rate_km2yr = total_km2 / n_years
+
+    # Relatable comparisons
+    uk_km2       = 242_495
+    football_ha  = 0.714
+    ha_lost_day  = rate_km2yr * HA_PER_KM2 / 365.25
+    fields_day   = ha_lost_day / football_ha
+
+    c1, c2, c3, c4 = st.columns(4)
+    facts = [
+        (f"{total_km2/1e6:.2f}M km²", f"Forest lost {period}"),
+        (f"{carbon_Gt:.1f} GtCO₂", "Carbon released equivalent"),
+        (f"{total_km2/uk_km2:.1f}× UK", "Area equivalent"),
+        (f"{fields_day:,.0f}/day", "Football pitches lost daily"),
+    ]
+    for col, (val, lbl) in zip([c1, c2, c3, c4], facts):
+        col.markdown(f'<div class="glass-sm"><div style="font-size:1.45rem;font-weight:800;color:#f87171">{val}</div><div style="font-size:.72rem;color:rgba(134,239,172,.55);margin-top:.2rem">{lbl}</div></div>',
+                     unsafe_allow_html=True)
+
+    st.markdown("<div style='height:.6rem'></div>", unsafe_allow_html=True)
+
+    x_col = "abs_loss" if view.startswith("Absolute") else "rate"
+    x_lbl = "Forest lost (km²)" if view.startswith("Absolute") else "Loss (% of 1990 forest)"
+    top = losers.nlargest(20, x_col).sort_values(x_col)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=top[x_col], y=top["country"], orientation="h",
+        marker=dict(
+            color=top[x_col],
+            colorscale=[[0, "#7f1d1d"], [0.5, "#dc2626"], [1, "#f87171"]],
+            showscale=False,
+        ),
+        text=top[x_col].apply(lambda v: f"{v:,.0f}" if view.startswith("Absolute") else f"{v:.1f}%"),
+        textposition="outside",
+        textfont=dict(color="#d1fae5", size=10),
+        hovertemplate="<b>%{y}</b><br>" + x_lbl + ": %{x:,.0f}<extra></extra>",
+    ))
+    layout = _plotly_dark_layout()
+    layout.update(height=560, xaxis=dict(**layout.get("xaxis", {}), title=x_lbl),
+                  yaxis=dict(**layout.get("yaxis", {}), showgrid=False),
+                  margin=dict(l=0, r=80, t=10, b=0))
+    fig.update_layout(**layout)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,rgba(127,29,29,0.25),rgba(153,27,27,0.15));
+                border:1px solid rgba(248,113,113,0.2);border-radius:16px;padding:1.4rem 1.6rem;margin:1rem 0">
+      <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;color:#f87171;margin-bottom:.5rem">THE AMAZON TIPPING POINT</div>
+      <div style="font-size:.9rem;color:#fca5a5;line-height:1.7">
+        In 2021, measurements confirmed what scientists feared: the <b style="color:#fff">eastern Amazon</b>
+        now emits <b style="color:#f87171">+0.86 PgC/yr</b> — more CO₂ than it absorbs.
+        The western Amazon is still a sink (−0.54 PgC/yr), but the net result is that
+        Earth's greatest forest has <b style="color:#fff">crossed its carbon tipping point</b>.
+        59% of the flux comes from fires; 41% from deforestation-driven forest degradation.<br>
+        <span style="font-size:.78rem;color:rgba(252,165,165,.55)">Gatti et al. 2021, Nature · doi:10.1038/s41586-021-03629-6</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="method-note">Forest area: World Bank AG.LND.FRST.ZS/K2. Carbon released = area lost × carbon density (Pan et al. 2011 Science). Relatable comparisons use UK land area 242,495 km², FIFA pitch 0.714 ha.</div>',
+                unsafe_allow_html=True)
+
+
+# ── Tab 4 — Solutions ─────────────────────────────────────────────────────────
+
+def tab_solutions(df: pd.DataFrame) -> None:
+    st.markdown("""
+    <div style="font-size:.72rem;font-weight:700;letter-spacing:.12em;color:#4ade80;margin-bottom:1rem">
+      WHAT WOULD IT ACTUALLY TAKE TO STOP DEFORESTATION?
+    </div>
+    """, unsafe_allow_html=True)
+
+    price = st.slider("Carbon price ($/tCO₂)", 10, 150, 50, 5, key="t4_price",
+                      help="Voluntary market ~$10–30. Policy-aligned scenarios: $50–150.")
 
     snap = df[df["year"] == LAST_YEAR].copy()
     base = df[df["year"] == 2000][["iso3", "forest_km2"]].rename(columns={"forest_km2": "km2_2000"})
     snap = snap.merge(base, on="iso3", how="left")
-    snap["annual_loss_km2"]      = ((snap["km2_2000"] - snap["forest_km2"]) / (LAST_YEAR - 2000)).clip(lower=0)
-    snap = snap[snap["annual_loss_km2"] > 10].copy()   # ≥10 km²/yr loss only
+    snap["ann_loss"] = ((snap["km2_2000"] - snap["forest_km2"]) / (LAST_YEAR - 2000)).clip(lower=0)
+    snap = snap[snap["ann_loss"] > 10].copy()
+    snap["co2_Mt"]      = snap["ann_loss"] * HA_PER_KM2 * snap["cd"] * TC_TO_TCO2 / 1e6
+    snap["revenue_M"]   = snap["co2_Mt"] * price
+    snap["cost_M"]      = snap["ann_loss"] * HA_PER_KM2 * PROTECTION_COST_HA / 1e6
+    snap["net_M"]       = snap["revenue_M"] - snap["cost_M"]
+    snap["break_even"]  = snap["cost_M"] / snap["co2_Mt"].clip(lower=0.001)
 
-    snap["co2_saved_MtCO2_yr"]      = snap["annual_loss_km2"] * HA_PER_KM2 * snap["cd"] * TC_TO_TCO2 / 1e6
-    snap["redd_revenue_MUSD_yr"]    = snap["co2_saved_MtCO2_yr"] * carbon_price
-    snap["protection_cost_MUSD_yr"] = snap["annual_loss_km2"] * HA_PER_KM2 * PROTECTION_COST_HA / 1e6
-    snap["net_benefit_MUSD_yr"]     = snap["redd_revenue_MUSD_yr"] - snap["protection_cost_MUSD_yr"]
-    snap["break_even_usd"]          = (snap["protection_cost_MUSD_yr"] /
-                                        snap["co2_saved_MtCO2_yr"].clip(lower=0.001))
-
-    total_rev  = snap["redd_revenue_MUSD_yr"].sum() / 1000
-    total_cost = snap["protection_cost_MUSD_yr"].sum() / 1000
-    net_total  = snap["net_benefit_MUSD_yr"].sum() / 1000
-    n_viable   = (snap["net_benefit_MUSD_yr"] > 0).sum()
+    total_rev   = snap["revenue_M"].sum() / 1000
+    total_cost  = snap["cost_M"].sum() / 1000
+    net         = snap["net_M"].sum() / 1000
+    n_profitable = (snap["net_M"] > 0).sum()
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(_card(f"${carbon_price}/tCO₂", "Selected carbon price"), unsafe_allow_html=True)
-    c2.markdown(_card(f"${total_rev:.1f}B/yr", "REDD+ revenue potential"), unsafe_allow_html=True)
-    c3.markdown(_card(f"${total_cost:.1f}B/yr", f"Protection cost est."), unsafe_allow_html=True)
-    net_cls = "" if net_total > 0 else "crit"
-    c4.markdown(_card(f"${net_total:.1f}B/yr", f"Net benefit · {n_viable} countries profitable", net_cls),
-                unsafe_allow_html=True)
+    kvs = [
+        (f"${total_rev:.0f}B/yr", "REDD+ revenue at this price", "#4ade80"),
+        (f"${total_cost:.0f}B/yr", "Estimated global protection cost", "#fbbf24"),
+        (f"${net:+.0f}B/yr", "Net (revenue minus cost)", "#4ade80" if net > 0 else "#f87171"),
+        (f"{n_profitable}", "Countries where it's profitable today", "#60a5fa"),
+    ]
+    for col, (v, l, c) in zip([c1, c2, c3, c4], kvs):
+        col.markdown(f'<div class="glass-sm"><div style="font-size:1.4rem;font-weight:800;color:{c}">{v}</div><div style="font-size:.72rem;color:rgba(134,239,172,.55);margin-top:.2rem">{l}</div></div>',
+                     unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<div style='height:.6rem'></div>", unsafe_allow_html=True)
 
-    top20 = snap.nlargest(20, "co2_saved_MtCO2_yr").copy()
-
-    bfig = go.Figure()
-    bfig.add_trace(go.Bar(
-        name="REDD+ revenue", x=top20["country"],
-        y=top20["redd_revenue_MUSD_yr"], marker_color="#22c55e",
-    ))
-    bfig.add_trace(go.Bar(
-        name="Protection cost", x=top20["country"],
-        y=top20["protection_cost_MUSD_yr"], marker_color="#94a3b8",
-    ))
-    bfig.update_layout(
+    top20 = snap.nlargest(20, "co2_Mt").copy()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name="REDD+ revenue", x=top20["country"],
+                         y=top20["revenue_M"], marker_color="#4ade80"))
+    fig.add_trace(go.Bar(name="Protection cost", x=top20["country"],
+                         y=top20["cost_M"], marker_color="rgba(134,239,172,0.25)"))
+    layout = _plotly_dark_layout()
+    layout.update(
         barmode="group", height=380,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False, tickangle=-35),
-        yaxis=dict(title="USD million / year", gridcolor="#e2e8f0"),
-        legend=dict(orientation="h", y=1.06), font=dict(family="Inter"),
+        xaxis=dict(**layout.get("xaxis", {}), showgrid=False, tickangle=-35),
+        yaxis=dict(**layout.get("yaxis", {}), title="USD million / year"),
+        legend=dict(orientation="h", y=1.08, font=dict(color="#d1fae5")),
         margin=dict(l=0, r=0, t=30, b=90),
     )
-    st.plotly_chart(bfig, use_container_width=True)
+    fig.update_layout(**layout)
+    st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("#### Country breakdown")
-    tbl = top20[["country", "annual_loss_km2", "co2_saved_MtCO2_yr",
-                  "redd_revenue_MUSD_yr", "protection_cost_MUSD_yr",
-                  "net_benefit_MUSD_yr", "break_even_usd"]].rename(columns={
-        "country":                "Country",
-        "annual_loss_km2":        "Ann. loss (km²/yr)",
-        "co2_saved_MtCO2_yr":    "CO₂ saved (MtCO₂/yr)",
-        "redd_revenue_MUSD_yr":   f"Revenue at ${carbon_price} ($M/yr)",
-        "protection_cost_MUSD_yr":"Protection cost ($M/yr)",
-        "net_benefit_MUSD_yr":    "Net benefit ($M/yr)",
-        "break_even_usd":         "Break-even ($/tCO₂)",
-    }).round(1).set_index("Country")
-    st.dataframe(tbl, use_container_width=True)
-
-    st.markdown("#### Break-even carbon price by country")
+    # Break-even scatter
     befig = px.scatter(
-        snap.nlargest(30, "co2_saved_MtCO2_yr"),
-        x="co2_saved_MtCO2_yr", y="break_even_usd",
-        size="annual_loss_km2", color="region",
+        snap.nlargest(30, "co2_Mt"),
+        x="co2_Mt", y="break_even", size="ann_loss", color="region",
         hover_name="country",
-        labels={"co2_saved_MtCO2_yr": "CO₂ saved if halted (MtCO₂/yr)",
-                "break_even_usd": "Break-even price ($/tCO₂)"},
+        labels={"co2_Mt": "CO₂ saved if halted (MtCO₂/yr)",
+                "break_even": "Break-even price ($/tCO₂)"},
         size_max=40,
     )
-    befig.add_hline(y=carbon_price, line_dash="dash", line_color="#ef4444",
-                    annotation_text=f"Selected price ${carbon_price}/tCO₂",
-                    annotation_position="top left")
-    befig.update_layout(
-        height=360, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(type="log", title="CO₂ saved (MtCO₂/yr, log scale)", gridcolor="#e2e8f0"),
-        yaxis=dict(title="Break-even price ($/tCO₂)", gridcolor="#e2e8f0"),
-        font=dict(family="Inter"), margin=dict(l=0, r=0, t=10, b=0),
+    befig.add_hline(y=price, line_dash="dash", line_color="#4ade80",
+                    annotation_text=f"Your price ${price}/tCO₂",
+                    annotation_font_color="#4ade80")
+    layout2 = _plotly_dark_layout()
+    layout2.update(
+        height=360,
+        xaxis=dict(**layout2.get("xaxis", {}), type="log",
+                   title="CO₂ saved (MtCO₂/yr, log scale)"),
+        yaxis=dict(**layout2.get("yaxis", {}), title="Break-even price ($/tCO₂)"),
+        legend=dict(font=dict(color="#d1fae5")),
     )
+    befig.update_layout(**layout2)
     st.plotly_chart(befig, use_container_width=True)
 
-    st.markdown(
-        f'<div class="method-note">REDD+ revenue = CO₂ saved × carbon price. '
-        f'Protection cost = ${PROTECTION_COST_HA}/ha/yr (Busch et al. 2019 Nature Climate Change, mid-range). '
-        f'Break-even = price at which REDD+ credits cover protection cost. '
-        f'Deforestation rate from World Bank 2000–2021 trend.</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="method-note">REDD+ revenue = CO₂ saved × carbon price. Protection cost = ${PROTECTION_COST_HA}/ha/yr (Busch et al. 2019). Break-even = price at which REDD+ becomes self-funding. Deforestation rate: World Bank 2000–2021 trend. Country below the dashed line is profitable at your selected price.</div>',
+                unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -578,12 +966,12 @@ def main() -> None:
     st.markdown("""
     <div class="rs-header">
       <div class="rs-badge">DAY 07 · THE RESILIENCE STACK</div>
-      <h1>🌳 Deforestation &amp; Carbon Sink Tracker</h1>
-      <p>Global forest cover 1990–2021 · Carbon stored &amp; at risk · Amazon carbon flip · REDD+ economics</p>
+      <h1>🌲 Forests &amp; Deforestation</h1>
+      <p>What remains · Where it's going · The carbon crisis · What would actually help</p>
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("Loading forest data from World Bank…"):
+    with st.spinner("Loading forest data…"):
         df = load_forest_data()
 
     if df.empty:
@@ -591,23 +979,23 @@ def main() -> None:
         return
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "🗺️  Forest Cover Map",
-        "🔥  Deforestation Pulse",
-        "🌡️  Carbon Sink Status",
-        "💰  REDD+ Economics",
+        "🌿  The Story",
+        "🗺️  Forest Map",
+        "🔥  Deforestation",
+        "💡  Solutions",
     ])
 
     with tab1:
-        tab_forest_map(df)
+        tab_story(df)
     with tab2:
-        tab_deforestation(df)
+        tab_forest_map(df)
     with tab3:
-        tab_carbon_status(df)
+        tab_deforestation(df)
     with tab4:
-        tab_redd_economics(df)
+        tab_solutions(df)
 
     st.markdown(
-        "<div style='text-align:center;color:#94a3b8;font-size:.75rem;margin-top:2rem'>"
+        "<div style='text-align:center;color:rgba(134,239,172,.3);font-size:.72rem;margin-top:2rem;padding-bottom:1rem'>"
         "Day 07 · The Resilience Stack · "
         "World Bank AG.LND.FRST.ZS/K2 · Pan et al. 2011 Science · "
         "Gatti et al. 2021 Nature · FAO FRA 2020 · Busch et al. 2019 NCC"
