@@ -11,6 +11,7 @@ Sources: World Bank AG.LND.FRST.ZS / AG.LND.FRST.K2
 
 import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -457,6 +458,74 @@ def _arrow_flip() -> str:
     """
 
 
+# ── Live deforestation counter ────────────────────────────────────────────────
+
+def _live_counter(loss_per_sec: float) -> None:
+    components.html(f"""
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;900&family=Inter:wght@400;500;600&display=swap');
+      * {{ margin:0; padding:0; box-sizing:border-box; }}
+      body {{ background:#fff7f7; font-family:'Inter',sans-serif; }}
+      .wrap {{
+        background:#fff7f7;
+        border:1px solid rgba(220,38,38,0.12);
+        border-top:4px solid #dc2626;
+        border-radius:0 0 10px 10px;
+        padding:1.6rem 2rem 1.4rem;
+        text-align:center;
+      }}
+      .label {{
+        font-size:10px; font-weight:700; letter-spacing:.12em;
+        text-transform:uppercase; color:#94a3b8; margin-bottom:.6rem;
+      }}
+      .counter {{
+        font-size:5rem; font-weight:900; color:#dc2626;
+        font-family:'Space Grotesk',sans-serif;
+        line-height:1; letter-spacing:-4px;
+        font-variant-numeric:tabular-nums;
+      }}
+      .unit {{ font-size:1.4rem; font-weight:600; color:#dc2626; letter-spacing:0; margin-left:4px; }}
+      .sub {{ font-size:.82rem; color:#64748b; margin-top:.55rem; }}
+      .sub b {{ color:#dc2626; }}
+      .rate {{
+        font-size:.72rem; color:#94a3b8; margin-top:.3rem;
+        border-top:1px solid rgba(220,38,38,0.08);
+        padding-top:.5rem; margin-top:.6rem;
+        display:flex; justify-content:center; gap:1.6rem; flex-wrap:wrap;
+      }}
+      .rate span {{ white-space:nowrap; }}
+    </style>
+    <div class="wrap">
+      <div class="label">hectares of forest cleared since you opened this tab</div>
+      <div>
+        <span class="counter" id="ha">0.0</span>
+        <span class="unit">ha</span>
+      </div>
+      <div class="sub">= <b id="pitches">0</b> football pitches gone</div>
+      <div class="rate">
+        <span>{loss_per_sec:.2f} ha / sec</span>
+        <span>{loss_per_sec * 60:.0f} ha / min</span>
+        <span>{loss_per_sec * 3600:.0f} ha / hr</span>
+        <span>{loss_per_sec * 86400:,.0f} ha / day</span>
+      </div>
+    </div>
+    <script>
+      const rate = {loss_per_sec};
+      const t0 = performance.now();
+      function fmt(n) {{
+        return n.toLocaleString('en-US', {{minimumFractionDigits:1, maximumFractionDigits:1}});
+      }}
+      function tick() {{
+        const ha = (performance.now() - t0) / 1000 * rate;
+        document.getElementById('ha').textContent = fmt(ha);
+        document.getElementById('pitches').textContent = Math.floor(ha / 0.714).toLocaleString('en-US');
+        requestAnimationFrame(tick);
+      }}
+      tick();
+    </script>
+    """, height=190, scrolling=False)
+
+
 # ── Tab 1 — The Story ─────────────────────────────────────────────────────────
 
 def tab_story(df: pd.DataFrame) -> None:
@@ -473,6 +542,11 @@ def tab_story(df: pd.DataFrame) -> None:
     days_elapsed    = (datetime.date.today() - datetime.date(datetime.date.today().year, 1, 1)).days
     lost_this_year  = int(annual_loss_ha * days_elapsed / 365.25)
     lost_mha        = (total_1990 - total_now) * HA_PER_KM2 / 1e6
+
+    # ── Live counter ──────────────────────────────────────────────────────────
+    _live_counter(loss_per_sec)
+
+    st.markdown("<div style='height:.2rem'></div>", unsafe_allow_html=True)
 
     # ── Beat 1: The Scale ─────────────────────────────────────────────────────
     st.markdown(f"""
