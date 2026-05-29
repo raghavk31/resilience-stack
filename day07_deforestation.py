@@ -90,17 +90,19 @@ FOREST_REGIONS = {
 
 COMPARE_YEARS = [2003, 2006, 2009, 2012, 2015, 2018, 2022]
 
-# ── Chart constants (dark Morphocode theme) ───────────────────────────────────
+# ── Chart constants (light theme) ────────────────────────────────────────────
 _BG   = "rgba(0,0,0,0)"
-_PBG  = "rgba(255,255,255,0.03)"
-_GC   = "rgba(255,255,255,0.05)"
-_ZC   = "rgba(255,255,255,0.08)"
-_TC   = "#94a3b8"
+_PBG  = "rgba(0,0,0,0.02)"
+_GC   = "rgba(0,0,0,0.07)"
+_ZC   = "rgba(0,0,0,0.12)"
+_TC   = "#475569"
 _FONT = dict(family="Inter", color=_TC)
 
 def _lyt(h: int = 360, **kw) -> dict:
-    return dict(paper_bgcolor=_BG, plot_bgcolor=_PBG, font=_FONT,
-                height=h, margin=dict(l=0, r=0, t=30, b=0), **kw)
+    base = dict(paper_bgcolor=_BG, plot_bgcolor=_PBG, font=_FONT,
+                height=h, margin=dict(l=0, r=0, t=30, b=0))
+    base.update(kw)
+    return base
 
 def _xax(**kw) -> dict:
     return dict(gridcolor=_GC, zerolinecolor=_ZC, color=_TC, **kw)
@@ -117,30 +119,30 @@ _CSS = """
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
 /* ── App background ── */
-.stApp { background: #0b0b11; }
+.stApp { background: #f8fafc; }
 [data-testid="stAppViewContainer"],
 [data-testid="stHeader"],
 section.main,
 [data-testid="block-container"] { background: transparent !important; }
 
 /* ── Text ── */
-p, li, span { color: #94a3b8; }
-h1, h2, h3, h4 { color: #e2e8f0; font-family: 'Space Grotesk', 'Inter', sans-serif; }
+p, li, span { color: #475569; }
+h1, h2, h3, h4 { color: #1e293b; font-family: 'Space Grotesk', 'Inter', sans-serif; }
 label, [data-testid="stWidgetLabel"] p,
 .stRadio label span p,
 .stSelectbox label { color: #64748b !important; font-size: 11px !important; letter-spacing: 0.04em; }
-.stMarkdown p { color: #94a3b8; font-size: 13px; }
+.stMarkdown p { color: #475569; font-size: 13px; }
 
 /* ── Tabs ── */
 .stTabs [data-baseweb="tab-list"] {
-    background: #13131b;
-    border: 1px solid rgba(255,255,255,0.06);
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.08);
     border-radius: 8px;
     padding: 3px;
     gap: 1px;
 }
 .stTabs [data-baseweb="tab"] {
-    color: #475569;
+    color: #94a3b8;
     border-radius: 6px;
     padding: 7px 16px;
     font-size: 12px;
@@ -148,15 +150,15 @@ label, [data-testid="stWidgetLabel"] p,
     letter-spacing: 0.02em;
 }
 .stTabs [aria-selected="true"] {
-    background: rgba(34,197,94,0.12) !important;
-    color: #22c55e !important;
+    background: rgba(34,197,94,0.10) !important;
+    color: #16a34a !important;
     font-weight: 600;
 }
 
 /* ── Morphocode card ── */
 .m-card {
-    background: #13131b;
-    border: 1px solid rgba(255,255,255,0.06);
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.07);
     border-radius: 8px;
     padding: 1.2rem 1.4rem;
     margin-bottom: .5rem;
@@ -166,7 +168,7 @@ label, [data-testid="stWidgetLabel"] p,
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #475569;
+    color: #94a3b8;
     margin-bottom: .5rem;
 }
 .m-value {
@@ -177,12 +179,12 @@ label, [data-testid="stWidgetLabel"] p,
     letter-spacing: -0.5px;
     font-family: 'Space Grotesk', 'Inter', sans-serif;
 }
-.m-sub { font-size: 11px; color: #475569; margin-top: .3rem; line-height: 1.4; }
+.m-sub { font-size: 11px; color: #94a3b8; margin-top: .3rem; line-height: 1.4; }
 
 /* ── Story cards ── */
 .s-card {
-    background: #13131b;
-    border: 1px solid rgba(255,255,255,0.06);
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.07);
     border-radius: 10px;
     padding: 1.4rem;
     position: relative;
@@ -202,7 +204,7 @@ label, [data-testid="stWidgetLabel"] p,
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #475569;
+    color: #94a3b8;
     margin-bottom: .6rem;
 }
 .s-number {
@@ -217,28 +219,28 @@ label, [data-testid="stWidgetLabel"] p,
 .s-headline {
     font-size: .82rem;
     font-weight: 600;
-    color: #cbd5e1;
+    color: #334155;
     margin-bottom: .4rem;
 }
 .s-body {
     font-size: .75rem;
-    color: #475569;
+    color: #64748b;
     line-height: 1.6;
 }
 .s-viz { margin: .8rem 0; }
 
 /* ── Colors ── */
-.c-green  { color: #22c55e; }
-.c-amber  { color: #f59e0b; }
-.c-red    { color: #ef4444; }
-.c-blue   { color: #60a5fa; }
-.c-purple { color: #a78bfa; }
-.c-teal   { color: #2dd4bf; }
-.c-white  { color: #f1f5f9; }
+.c-green  { color: #16a34a; }
+.c-amber  { color: #d97706; }
+.c-red    { color: #dc2626; }
+.c-blue   { color: #2563eb; }
+.c-purple { color: #7c3aed; }
+.c-teal   { color: #0d9488; }
+.c-white  { color: #1e293b; }
 
 /* ── Mini viz elements ── */
 .mini-bar-track {
-    background: rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.07);
     border-radius: 2px;
     height: 4px;
     margin: 2px 0;
@@ -256,54 +258,54 @@ label, [data-testid="stWidgetLabel"] p,
 
 /* ── Header ── */
 .rs-header {
-    background: linear-gradient(135deg, #0a1a0e 0%, #0d2a15 60%, #0a1a0e 100%);
-    border: 1px solid rgba(34,197,94,0.12);
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 60%, #f0fdf4 100%);
+    border: 1px solid rgba(34,197,94,0.25);
     border-radius: 10px;
     padding: 1.6rem 2rem 1.4rem;
     margin-bottom: 1.2rem;
 }
 .rs-header h1 {
     font-size: 1.7rem; font-weight: 900; margin: 0 0 .2rem;
-    color: #f0fdf4; letter-spacing: -.5px;
+    color: #14532d; letter-spacing: -.5px;
     font-family: 'Space Grotesk', sans-serif;
 }
-.rs-header p { font-size: .82rem; color: #4ade80; margin: 0; }
+.rs-header p { font-size: .82rem; color: #16a34a; margin: 0; }
 .rs-badge {
     font-size: 9px; font-weight: 700; letter-spacing: .12em;
-    color: #22c55e; margin-bottom: .5rem; display: block;
+    color: #16a34a; margin-bottom: .5rem; display: block;
 }
 
 /* ── Method note ── */
 .method-note {
-    background: rgba(255,255,255,0.02);
-    border-left: 2px solid rgba(34,197,94,0.3);
+    background: rgba(0,0,0,0.02);
+    border-left: 2px solid rgba(22,163,74,0.35);
     padding: .5rem .9rem;
     border-radius: 0 6px 6px 0;
-    font-size: .72rem; color: #475569; margin-top: 1rem;
+    font-size: .72rem; color: #64748b; margin-top: 1rem;
 }
 
 /* ── Map label ── */
 .map-label {
     font-size: 10px; font-weight: 600; letter-spacing: .1em;
-    text-transform: uppercase; color: #475569;
+    text-transform: uppercase; color: #94a3b8;
     margin-bottom: .4rem;
 }
 
 /* ── Divider ── */
-hr { border-color: rgba(255,255,255,0.05) !important; }
+hr { border-color: rgba(0,0,0,0.07) !important; }
 
 /* ── Sidebar ── */
 section[data-testid="stSidebar"] { display: none; }
 
 /* ── Inputs ── */
 [data-baseweb="select"] > div {
-    background: #13131b !important;
-    border-color: rgba(255,255,255,0.08) !important;
-    color: #e2e8f0 !important;
+    background: #ffffff !important;
+    border-color: rgba(0,0,0,0.10) !important;
+    color: #1e293b !important;
 }
-[data-baseweb="select"] span { color: #e2e8f0 !important; }
+[data-baseweb="select"] span { color: #1e293b !important; }
 [data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {
-    background: #22c55e !important;
+    background: #16a34a !important;
 }
 
 /* ── st_folium container ── */
@@ -579,7 +581,7 @@ def tab_story(df: pd.DataFrame) -> None:
         x=trend_df["year"], y=trend_df["gha"],
         mode="lines+markers",
         line=dict(color="#22c55e", width=2.5),
-        marker=dict(size=7, color="#22c55e", line=dict(color="#0b0b11", width=1.5)),
+        marker=dict(size=7, color="#16a34a", line=dict(color="#ffffff", width=1.5)),
         fill="tozeroy", fillcolor="rgba(34,197,94,0.06)",
         hovertemplate="<b>%{x}</b><br>%{y:.2f} Gha<extra></extra>",
     ))
@@ -587,8 +589,8 @@ def tab_story(df: pd.DataFrame) -> None:
                       font=dict(color="#ef4444", size=10, family="Inter"),
                       showarrow=True, arrowcolor="#ef4444", arrowwidth=1, arrowhead=2, ax=40, ay=-25)
     tf.add_annotation(x=1900, y=5.9, text="5.9 Gha · 1900",
-                      font=dict(color="#22c55e", size=10, family="Inter"),
-                      showarrow=True, arrowcolor="#22c55e", arrowwidth=1, arrowhead=2, ax=10, ay=-25)
+                      font=dict(color="#16a34a", size=10, family="Inter"),
+                      showarrow=True, arrowcolor="#16a34a", arrowwidth=1, arrowhead=2, ax=10, ay=-25)
     tf.update_layout(**_lyt(h=240, margin=dict(l=0, r=0, t=10, b=0),
                             xaxis=_xax(showgrid=False),
                             yaxis=_yax(showgrid=True, title="Billion ha", range=[3.5, 6.3])))
@@ -686,7 +688,7 @@ def tab_satellite_map() -> None:
                 sticky=False,
             ),
             icon=folium.DivIcon(
-                html=f'<div style="background:#0b0b11;border:1px solid #22c55e;color:#22c55e;'
+                html=f'<div style="background:#ffffff;border:1px solid #16a34a;color:#16a34a;'
                      f'font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;'
                      f'white-space:nowrap;font-family:Inter,sans-serif">{title}</div>',
                 icon_size=(120, 22),
