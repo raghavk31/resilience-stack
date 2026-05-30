@@ -3,3 +3,4 @@ data/owid_energy.csv
 __pycache__/
 *.pyc
 .DS_Store
+.gstack/
