@@ -7,8 +7,9 @@ Sources:
   World Bank SH.STA.AIRP.P5    — air pollution mortality rate per 100k (2019)
   World Bank SP.POP.TOTL        — population
   WHO Global Ambient Air Quality Guidelines 2021
-  IQAir 2022 World Air Quality Report — city-level reference PM2.5
-  OECD / WHO — value of statistical life by income level
+  IQAir 2023 World Air Quality Report — city-level annual mean PM2.5 (2022 data)
+  IQAir AirVisual API           — real-time city PM2.5 (requires IQAIR_KEY secret)
+  OECD 2020 VSL meta-analysis   — value of statistical life by income level
 """
 
 import streamlit as st
@@ -37,8 +38,9 @@ FIRST_YEAR, LAST_PM25_YEAR, LAST_MORT_YEAR = 1990, 2020, 2019
 WHO_2021 = 5.0
 WHO_2005 = 10.0
 
-VSL_USD = {"HIC": 8_000_000, "UMC": 3_000_000, "LMC": 1_000_000, "LIC": 500_000}
-DEFAULT_VSL = 1_500_000
+# OECD 2020 "Valuing Mortality Risk Reductions in Regulatory Analysis" — updated from 2012
+VSL_USD = {"HIC": 9_400_000, "UMC": 3_500_000, "LMC": 1_200_000, "LIC": 600_000}
+DEFAULT_VSL = 1_800_000
 
 AQI_BREAKS = [
     (0.0,   12.0,   0,  50, "Good",                  "#16a34a"),
@@ -319,6 +321,27 @@ def _r_lbl(text: str, color: str = "#6366f1") -> str:
     return f'<div class="r-lbl" style="color:{color}">{text}</div>'
 
 
+@st.cache_data(ttl=3_600, show_spinner=False)
+def _fetch_live_pm25(lat: float, lon: float) -> float | None:
+    """IQAir AirVisual API — nearest city current PM2.5 (µg/m³). Requires IQAIR_KEY secret."""
+    key = st.secrets.get("IQAIR_KEY", "")
+    if not key:
+        return None
+    try:
+        r = requests.get(
+            "https://api.airvisual.com/v2/nearest_city",
+            params={"lat": lat, "lon": lon, "key": key},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            d = r.json()
+            if d.get("status") == "success":
+                return float(d["data"]["current"]["pollution"]["p2"]["conc"])
+    except Exception:
+        pass
+    return None
+
+
 def _chart_layout(h: int = 460, **kw) -> dict:
     base = dict(
         height=h,
@@ -450,10 +473,11 @@ def tab_pm25_map(snap: pd.DataFrame, pm25_ts: pd.DataFrame) -> None:
             WHO 2021 GUIDELINE — 5 µg/m³ annual mean
           </div>
           <div style="font-size:.78rem;color:#475569;line-height:1.7">
-            The revised limit is <b style="color:#1e293b">half the previous 2005 target</b>.
-            It is now stricter than the legal air quality standard of every country on Earth.
-            Meeting it would prevent an estimated <b style="color:#6366f1">3.3 million premature deaths</b>
-            per year in the 15 most polluted countries alone.
+            The revised limit is <b style="color:#1e293b">half the previous 2005 target</b> and
+            stricter than the legal air quality standard of every country on Earth.
+            The WHO estimates that meeting it globally would prevent the majority of the
+            <b style="color:#6366f1">7 million annual deaths</b> currently attributed to air pollution —
+            making it the single highest-impact public health standard ever set.
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -465,6 +489,10 @@ def tab_health_impact(snap: pd.DataFrame) -> None:
     snap_h = snap.dropna(subset=["mort_per_100k"]).copy()
     snap_h["deaths_k"] = snap_h["deaths"] / 1000
     total_deaths = snap_h["deaths"].sum()
+
+    sa_rate = snap_h[snap_h["region"].str.contains("South Asia", na=False)]["mort_per_100k"].mean()
+    eu_rate = snap_h[snap_h["region"].str.contains("Europe", na=False)]["mort_per_100k"].mean()
+    sa_eu_ratio = f"{sa_rate / eu_rate:.1f}×" if eu_rate and eu_rate > 0 else "—"
 
     left, right = st.columns([1, 2.3], gap="medium")
 
@@ -478,12 +506,12 @@ def tab_health_impact(snap: pd.DataFrame) -> None:
                 "#dc2626", "#fff1f2") +
             _sc(f"{total_deaths/1e6:.1f}M", f"Modelled deaths — {LAST_MORT_YEAR}",
                 "from World Bank mortality rates × country population",
-                "This covers countries with available data. The WHO Global Health "
+                "This covers countries with available mortality data. The WHO Global Health "
                 "Observatory estimates the true toll at 6.7–7.0M. "
                 "Data gaps mean the poorest nations are most under-counted.",
                 "#dc2626", "#fff1f2") +
-            _sc("3–5×", "South Asia vs Europe mortality gap",
-                "higher air-pollution death rate in South Asia at similar income levels",
+            _sc(sa_eu_ratio, "South Asia vs Europe mortality gap",
+                "higher air-pollution death rate in South Asia vs European average (World Bank data)",
                 "Crop residue burning in October–November raises India's PM2.5 to "
                 "300+ µg/m³ in northern states. Combined with high population density "
                 "and limited healthcare access, this drives outsized mortality.",
@@ -591,17 +619,16 @@ def tab_economic_cost(snap: pd.DataFrame) -> None:
                 "cost of air pollution in South Asia is structurally undervalued "
                 "by this methodology.",
                 "#d97706", "#fffbeb") +
-            _sc("30–50× return", "Clean air investment ratio",
-                "every $1 invested in reducing air pollution prevents $30–50 in health costs",
-                "WHO and World Bank analyses consistently show air quality "
-                "interventions — vehicle emission standards, cookstove transitions, "
-                "coal plant retirement — rank among the highest-return public "
-                "health investments available.",
+            _sc("up to 30×", "Clean air investment return",
+                "every $1 invested in air quality prevents up to $30 in health costs (WHO/World Bank)",
+                "Vehicle emission standards, cookstove transitions, and coal plant retirement "
+                "consistently rank among the highest-return public health investments. "
+                "Returns vary by setting: $3–$30 per dollar depending on baseline pollution level.",
                 "#d97706", "#fffbeb"),
             unsafe_allow_html=True,
         )
 
-        st.markdown('<div class="method-note">Cost = deaths × VSL by income: HIC $8M · UMC $3M · LMC $1M · LIC $0.5M. OECD 2012 meta-analysis. WHO welfare-loss $5.1T: WHO 2016 health cost report.</div>',
+        st.markdown('<div class="method-note">Cost = deaths × VSL by income: HIC $9.4M · UMC $3.5M · LMC $1.2M · LIC $0.6M. OECD 2020 meta-analysis (updated from 2012). WHO welfare-loss $5.1T: WHO/World Bank 2016 joint report.</div>',
                     unsafe_allow_html=True)
 
     with right:
@@ -682,10 +709,11 @@ def tab_city_air() -> None:
     with left:
         st.markdown(
             _sc("Delhi: 92 µg/m³", "Most polluted city",
-                f"18× the WHO safe limit — equivalent to smoking 8 cigarettes a day",
+                "18× the WHO safe limit — equivalent to smoking ~9 cigarettes a day",
                 "20 million people breathe this air. In winter, Delhi's PM2.5 exceeds "
                 "300 µg/m³ for weeks. Crop burning in Punjab and Haryana, combined with "
-                "stagnant air, creates a toxic inversion layer over the entire city.",
+                "stagnant air, creates a toxic inversion layer over the entire city. "
+                "(Cigarette equiv: 10 µg/m³ ≈ 1 cigarette/day · Berkeley Earth.)",
                 "#0891b2", "#ecfeff") +
             _sc(f"{n_safe} of {len(cdf)}", "Cities meeting WHO 2021 standard",
                 f"Only {n_safe} cities at or below 5 µg/m³ · {n_2005} meet the older 10 µg/m³ target",
@@ -711,7 +739,51 @@ def tab_city_air() -> None:
             key="t4_region",
         )
 
-        st.markdown('<div class="method-note">City PM2.5: IQAir 2022 World Air Quality Report. AQI: US EPA breakpoints. WHO guideline: 5 µg/m³ annual mean (2021).</div>',
+        st.markdown("---")
+
+        # Live AQI lookup via IQAir API
+        st.markdown(
+            '<div style="font-size:9px;font-weight:700;letter-spacing:.12em;'
+            'text-transform:uppercase;color:#0891b2;margin-bottom:.4rem">'
+            '🔴 LIVE AQI LOOKUP</div>',
+            unsafe_allow_html=True,
+        )
+        live_city = st.selectbox("City", list(CITY_AIR.keys()), key="t4_live")
+        if st.button("Fetch current reading", key="t4_fetch", use_container_width=True):
+            lat, lon, annual_pm25, _, _ = CITY_AIR[live_city]
+            with st.spinner("Querying IQAir API…"):
+                live_pm25 = _fetch_live_pm25(lat, lon)
+            if live_pm25 is not None:
+                live_aqi        = _pm25_to_aqi(live_pm25)
+                live_lbl, live_col = _aqi_label(live_aqi)
+                delta           = live_pm25 - annual_pm25
+                delta_str       = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
+                st.markdown(f"""
+                <div style="background:#ecfeff;border:1px solid rgba(8,145,178,0.2);
+                     border-left:3px solid #0891b2;border-radius:0 8px 8px 0;padding:.8rem 1rem">
+                  <div style="font-size:8px;font-weight:700;letter-spacing:.12em;
+                              text-transform:uppercase;color:#0891b2;margin-bottom:.3rem">
+                    RIGHT NOW — {live_city.split(',')[0].upper()}
+                  </div>
+                  <div style="font-size:1.6rem;font-weight:900;color:{live_col};
+                              font-family:'Space Grotesk',sans-serif;line-height:1;letter-spacing:-1px">
+                    {live_pm25:.1f} µg/m³
+                  </div>
+                  <div style="font-size:.7rem;color:#334155;margin:.2rem 0">
+                    AQI {live_aqi} · <b style="color:{live_col}">{live_lbl}</b>
+                  </div>
+                  <div style="font-size:.68rem;color:#64748b">
+                    Annual mean: {annual_pm25:.0f} µg/m³ &nbsp;·&nbsp;
+                    Current {delta_str} µg/m³ vs annual avg
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+            elif not st.secrets.get("IQAIR_KEY", ""):
+                st.caption("Add `IQAIR_KEY` to Streamlit secrets to enable live readings.")
+            else:
+                st.caption("Could not fetch live data — API error or rate limit.")
+
+        st.markdown('<div class="method-note">Annual PM2.5: IQAir 2023 World Air Quality Report (2022 data). Live readings: IQAir AirVisual API nearest_city endpoint, cached 1 hr. AQI: US EPA PM2.5 breakpoints. WHO guideline: 5 µg/m³ (2021).</div>',
                     unsafe_allow_html=True)
 
     with right:
