@@ -132,31 +132,44 @@ _CSS = """
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #1a1a1a; }
 #MainMenu, header[data-testid="stHeader"], footer { display: none !important; }
 
-/* ── Full-viewport scroll lock ─────────────────────── */
+/* ── Mesh-gradient canvas ───────────────────────── */
 html { overflow: hidden !important; }
-.stApp,
+
+.stApp {
+  background:
+    radial-gradient(ellipse 55% 45% at 18% 12%, rgba(249,115,22,.13) 0%, transparent 100%),
+    radial-gradient(ellipse 50% 40% at 88% 8%,  rgba(59,130,246,.10) 0%, transparent 100%),
+    radial-gradient(ellipse 45% 55% at 8%  78%, rgba(139,92,246,.08) 0%, transparent 100%),
+    radial-gradient(ellipse 50% 40% at 92% 82%, rgba(239,68,68,.07)  0%, transparent 100%),
+    #eceff8 !important;
+  height: 100vh !important; overflow: hidden !important;
+}
+
+/* All intermediate containers: transparent so gradient bleeds through */
 [data-testid="stAppViewContainer"],
-section.main { height: 100vh !important; overflow: hidden !important; }
+section.main { height: 100vh !important; overflow: hidden !important; background: transparent !important; }
 
 [data-testid="block-container"] {
   height: 100vh !important; overflow: hidden !important; padding: 0 !important;
   max-width: 100% !important; display: flex !important; flex-direction: column !important;
+  background: transparent !important;
 }
 
 /* ── Tabs flex chain ───────────────────────────────── */
 [data-testid="stTabs"] {
   flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
-  display: flex !important; flex-direction: column !important;
+  display: flex !important; flex-direction: column !important; background: transparent !important;
 }
 [data-baseweb="tab-list"] { flex-shrink: 0 !important; }
 [data-testid="stTabsContent"] {
   flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important;
+  background: transparent !important;
 }
-/* All wrapper divs between stTabsContent and stHorizontalBlock */
 [data-testid="stTabsContent"] > div,
 [data-testid="stTabsContent"] [data-testid="stVerticalBlockBorderWrapper"],
 [data-testid="stTabsContent"] [data-testid="stVerticalBlock"] {
-  height: 100% !important; min-height: 0 !important; overflow: hidden !important;
+  height: 100% !important; min-height: 0 !important;
+  overflow: hidden !important; background: transparent !important;
 }
 
 /* ── Two-column independent scroll ────────────────── */
@@ -165,128 +178,251 @@ section.main { height: 100vh !important; overflow: hidden !important; }
   overflow: hidden !important; align-items: stretch !important;
   gap: 0 !important; flex-wrap: nowrap !important;
 }
-/* Target Streamlit 1.37+ column testid */
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="stColumn"],
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="column"] {
   min-height: 0 !important; overflow-y: auto !important; overflow-x: hidden !important;
   padding: 0 !important; margin: 0 !important;
 }
+/* Left panel: frosted glass */
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="stColumn"]:first-child,
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="column"]:first-child {
-  background: #ffffff !important; border-right: 1px solid rgba(0,0,0,0.07) !important;
+  background: rgba(255,255,255,.84) !important;
+  backdrop-filter: blur(28px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
+  border-right: 1px solid rgba(255,255,255,.55) !important;
+  box-shadow: inset -1px 0 0 rgba(0,0,0,.04) !important;
 }
+/* Right panel: lighter glass */
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="stColumn"]:last-child,
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="column"]:last-child {
-  background: #f0f0f0 !important;
+  background: rgba(255,255,255,.38) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
 }
 /* Thin scrollbars */
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="stColumn"]::-webkit-scrollbar,
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="column"]::-webkit-scrollbar { width: 3px; }
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="stColumn"]::-webkit-scrollbar-thumb,
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) > [data-testid="column"]::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.14); border-radius: 2px;
+  background: rgba(0,0,0,.12); border-radius: 2px;
 }
 
-/* ── Header ─────────────────────────────────────────── */
+/* ── Header — frosted glass ──────────────────────── */
 .mc-header {
-  background: #fff; border-bottom: 1px solid rgba(0,0,0,0.07);
+  background: rgba(255,255,255,.88);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border-bottom: 1px solid rgba(255,255,255,.55);
+  box-shadow: 0 1px 0 rgba(0,0,0,.06);
   padding: 13px 30px; display: flex; align-items: center;
   justify-content: space-between; flex-shrink: 0;
 }
 .mc-topline {
   font-size: 10px; font-weight: 700; letter-spacing: .18em;
-  text-transform: uppercase; color: #bbb; display: flex; align-items: center; gap: 8px;
+  text-transform: uppercase; color: #94a3b8;
+  display: flex; align-items: center; gap: 8px;
 }
-.mc-dot { width: 8px; height: 8px; border-radius: 50%; background: #f97316; display: inline-block; }
-.mc-header-right { font-size: .68rem; color: #ccc; font-weight: 500; }
+.mc-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: linear-gradient(135deg,#f97316,#fb923c);
+  box-shadow: 0 0 8px rgba(249,115,22,.5);
+  display: inline-block;
+}
+.mc-header-right { font-size: .68rem; color: #cbd5e1; font-weight: 500; }
 
-/* ── Tab bar ──────────────────────────────────────── */
+/* ── Tab bar — frosted glass ─────────────────────── */
 .stTabs [data-baseweb="tab-list"] {
-  background: #fff !important; padding: 0 22px !important; gap: 0 !important;
-  border-bottom: 1px solid rgba(0,0,0,0.07) !important;
+  background: rgba(255,255,255,.88) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  border-bottom: 1px solid rgba(0,0,0,.07) !important;
+  padding: 0 22px !important; gap: 0 !important;
 }
 .stTabs [data-baseweb="tab"] {
-  background: transparent !important; color: #bbb !important;
+  background: transparent !important; color: #94a3b8 !important;
   font-size: 10.5px !important; font-weight: 700 !important;
   text-transform: uppercase !important; letter-spacing: .1em !important;
   padding: 12px 20px !important; border: none !important; border-radius: 0 !important;
+  transition: color .15s !important;
 }
 .stTabs [aria-selected="true"] { color: #111 !important; border-bottom: 2.5px solid #111 !important; }
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
 [data-testid="stTabsContent"] { padding: 0 !important; }
 
-/* ── Left panel typographic ──────────────────────── */
+/* ── Left panel typography ───────────────────────── */
 .mc-anchor { display: none !important; }
-.lp-sep  { border: none; border-top: 1px solid rgba(0,0,0,0.07); margin: 14px 0; }
-.lp-sec  { font-size: .63rem; font-weight: 700; color: #ccc; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 10px; }
-.lp-note { font-size: .63rem; color: #bbb; line-height: 1.65; }
-.lp-title { font-family: 'Space Grotesk',sans-serif; font-size: 1.18rem; font-weight: 800; color: #111; letter-spacing: -.3px; line-height: 1.2; margin: 0 0 .35rem; }
-.lp-desc  { font-size: .74rem; color: #999; line-height: 1.7; margin: 0; }
-
-/* ── Story cards ─────────────────────────────────── */
-.sc {
-  border-radius: 8px; padding: 11px 12px 10px; margin-bottom: 8px;
-  background: #fafafa; border: 1px solid rgba(0,0,0,0.06); border-left-width: 3px;
+.lp-sep  { border: none; border-top: 1px solid rgba(0,0,0,.06); margin: 14px 0; }
+.lp-sec  { font-size: .61rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .14em; margin-bottom: 10px; }
+.lp-note { font-size: .63rem; color: #94a3b8; line-height: 1.65; }
+.lp-title {
+  font-family: 'Space Grotesk',sans-serif; font-size: 1.2rem; font-weight: 800;
+  letter-spacing: -.4px; line-height: 1.2; margin: 0 0 .35rem;
+  background: linear-gradient(135deg,#111 0%,#334155 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
-.sc-top  { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
-.sc-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.sc-stat { font-family: 'Space Grotesk',sans-serif; font-size: 1.25rem; font-weight: 900; line-height: 1; letter-spacing: -.4px; }
-.sc-lbl  { font-size: .62rem; color: #999; margin-top: 2px; }
-.sc-body { font-size: .69rem; color: #555; line-height: 1.62; margin-bottom: 5px; }
-.sc-src  { font-size: .6rem; color: #ccc; font-style: italic; }
+.lp-desc { font-size: .74rem; color: #94a3b8; line-height: 1.7; margin: 0; }
 
-/* ── Score badge ─────────────────────────────────── */
-.sb { border-radius: 9px; padding: 12px 14px; }
-.sb-lbl { font-size: .63rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 2px; }
-.sb-val { font-family: 'Space Grotesk',sans-serif; font-size: 2.8rem; font-weight: 900; line-height: 1; letter-spacing: -2px; }
-.sb-sub { font-size: .78rem; font-weight: 600; margin-top: 4px; color: #555; }
-
-/* ── Dim bars ────────────────────────────────────── */
-.db  { margin-bottom: 8px; }
-.db-h { display: flex; justify-content: space-between; font-size: .7rem; font-weight: 600; color: #444; margin-bottom: 3px; }
-.db-t { background: rgba(0,0,0,0.06); border-radius: 3px; height: 5px; overflow: hidden; }
-.db-f { height: 100%; border-radius: 3px; }
+/* ── Story cards — glass ─────────────────────────── */
+.sc {
+  border-radius: 14px; padding: 12px 13px 11px; margin-bottom: 9px;
+  background: rgba(255,255,255,.68);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.9);
+  border-left-width: 3px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.03);
+  transition: box-shadow .2s ease, transform .15s ease;
+}
+.sc:hover { box-shadow: 0 6px 24px rgba(0,0,0,.09); transform: translateY(-1px); }
+.sc-top  { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.sc-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sc-stat { font-family: 'Space Grotesk',sans-serif; font-size: 1.28rem; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+.sc-lbl  { font-size: .62rem; color: #94a3b8; margin-top: 2px; }
+.sc-body { font-size: .69rem; color: #475569; line-height: 1.64; margin-bottom: 6px; }
+.sc-src  { font-size: .59rem; color: #cbd5e1; font-style: italic; }
 
 /* ── Polycrisis card ─────────────────────────────── */
-.poly-card { background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 10px; padding: 15px 17px; margin-bottom: 12px; }
-.poly-by   { font-size: .6rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #f97316; margin-bottom: 8px; }
-.poly-q    { font-family: 'Space Grotesk',sans-serif; font-size: .92rem; font-weight: 700; color: #f8fafc; line-height: 1.45; margin-bottom: 8px; }
-.poly-sub  { font-size: .68rem; color: rgba(248,250,252,.42); line-height: 1.62; }
+.poly-card {
+  background: linear-gradient(135deg, rgba(15,23,42,.97), rgba(30,41,59,.97));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px; padding: 17px 18px; margin-bottom: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.poly-by  { font-size: .59rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #f97316; margin-bottom: 9px; }
+.poly-q   { font-family: 'Space Grotesk',sans-serif; font-size: .93rem; font-weight: 700; color: #f8fafc; line-height: 1.48; margin-bottom: 9px; }
+.poly-sub { font-size: .68rem; color: rgba(248,250,252,.42); line-height: 1.64; }
+
+/* ── Score badge — glass ─────────────────────────── */
+.sb {
+  background: rgba(255,255,255,.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,.95);
+  border-radius: 20px; padding: 0 14px 14px;
+  box-shadow: 0 6px 28px rgba(0,0,0,.08);
+  text-align: center;
+}
+.sb-lbl { font-size: .61rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding-top: 12px; margin-bottom: 0; }
+.sb-band { font-size: .78rem; font-weight: 600; margin-top: 4px; }
+
+/* ── Dimension bars — gradient fills ─────────────── */
+.db  { margin-bottom: 9px; }
+.db-h { display: flex; justify-content: space-between; font-size: .7rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+.db-t { background: rgba(0,0,0,.06); border-radius: 10px; height: 6px; overflow: hidden; }
+.db-f { height: 100%; border-radius: 10px; transition: width .4s ease; }
 
 /* ── Right panel ─────────────────────────────────── */
-.rp-lbl { font-size: .63rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #bbb; margin-bottom: 5px; }
-.rp-sep { border: none; border-top: 1px solid rgba(0,0,0,0.07); margin: 12px 0; }
+.rp-lbl { font-size: .61rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
+.rp-sep { border: none; border-top: 1px solid rgba(0,0,0,.06); margin: 12px 0; }
 
-/* ── Stat pills ──────────────────────────────────── */
-.sp-row { display: flex; gap: 8px; flex-wrap: nowrap; margin-bottom: 4px; }
-.sp { background: white; border-radius: 8px; padding: 9px 11px; border: 1px solid rgba(0,0,0,0.07); flex: 1; min-width: 0; }
-.sp-val { font-family: 'Space Grotesk',sans-serif; font-size: 1.2rem; font-weight: 800; color: #111; line-height: 1; }
-.sp-lbl { font-size: .6rem; color: #bbb; margin-top: 3px; line-height: 1.3; }
+/* ── Stat pills — glass ──────────────────────────── */
+.sp-row { display: flex; gap: 9px; flex-wrap: nowrap; margin-bottom: 4px; }
+.sp {
+  background: rgba(255,255,255,.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 14px; padding: 10px 13px; flex: 1; min-width: 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,.05);
+}
+.sp-val { font-family: 'Space Grotesk',sans-serif; font-size: 1.22rem; font-weight: 800; color: #111; line-height: 1; }
+.sp-lbl { font-size: .59rem; color: #94a3b8; margin-top: 3px; line-height: 1.35; }
 
-/* ── Band legend ─────────────────────────────────── */
-.bl-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
-.bl-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
-.bl-lbl { font-size: .69rem; color: #555; flex: 1; }
-.bl-cnt { font-size: .69rem; font-weight: 700; color: #333; }
+/* ── Band legend + stacked bar ───────────────────── */
+.bl-bar  { height: 8px; display: flex; border-radius: 8px; overflow: hidden; margin: 8px 0 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.bl-row  { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+.bl-dot  { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.bl-lbl  { font-size: .68rem; color: #475569; flex: 1; }
+.bl-cnt  { font-size: .68rem; font-weight: 700; color: #334155; }
 
-/* ── Insight cards ───────────────────────────────── */
-.ic { background: white; border-radius: 7px; padding: 10px 12px; margin-bottom: 6px; border: 1px solid rgba(0,0,0,0.06); }
-.ic-body { font-size: .67rem; color: #777; line-height: 1.52; margin-top: 4px; }
+/* ── Insight cards — glass ───────────────────────── */
+.ic {
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.88);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 7px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+.ic-body { font-size: .67rem; color: #64748b; line-height: 1.54; margin-top: 4px; }
 
-/* ── Narrative card ──────────────────────────────── */
-.nc { background: linear-gradient(135deg,#f8fafc,#f1f5f9); border-radius: 8px; border: 1px solid rgba(0,0,0,0.06); padding: 11px 13px; }
-.nc-l { font-size: .61rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #94a3b8; margin-bottom: 5px; }
-.nc-b { font-size: .71rem; color: #475569; line-height: 1.65; }
+/* ── Narrative card — glass ──────────────────────── */
+.nc {
+  background: rgba(241,245,249,.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 14px; padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
+}
+.nc-l { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #94a3b8; margin-bottom: 5px; }
+.nc-b { font-size: .71rem; color: #475569; line-height: 1.66; }
+
+/* ── Context cards on right panel ────────────────── */
+.ctx-card {
+  background: rgba(255,255,255,.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 14px; padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05);
+}
+
+/* ── Extremes cards ──────────────────────────────── */
+.ext-card {
+  flex: 1; border-radius: 12px; padding: 10px 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+
+/* ── Risk distribution card ──────────────────────── */
+.risk-card {
+  background: rgba(254,242,242,.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(254,202,202,.6);
+  border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+}
+
+/* ── Compounding callout ─────────────────────────── */
+.compound-card {
+  background: rgba(255,247,237,.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(249,115,22,.2);
+  border-left: 3px solid #f97316;
+  border-radius: 0 14px 14px 0;
+  padding: 14px 15px; margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(249,115,22,.08);
+}
+
+/* ── How-to-read card ────────────────────────────── */
+.how-card {
+  background: rgba(248,250,252,.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 14px; padding: 12px 14px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.04);
+}
 
 /* ── Widget cleanup ──────────────────────────────── */
 section.main label, section.main [data-testid="stWidgetLabel"] p {
-  font-size: .74rem !important; font-weight: 600 !important; color: #333 !important;
+  font-size: .74rem !important; font-weight: 600 !important; color: #374151 !important;
 }
 [data-baseweb="select"] > div {
-  background: white !important; border: 1px solid rgba(0,0,0,0.11) !important;
-  border-radius: 6px !important; font-size: .75rem !important;
+  background: rgba(255,255,255,.9) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255,255,255,.8) !important;
+  border-radius: 10px !important; font-size: .75rem !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06) !important;
 }
-/* Collapse Streamlit's default vertical gaps inside our panels */
+[data-baseweb="select"] span { color: #374151 !important; }
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) [data-testid="stMarkdown"],
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) .stMarkdown { margin-bottom: 0 !important; }
 </style>
@@ -471,10 +607,12 @@ def _chart(h: int = 480, **kw) -> dict:
 
 def _story_card(dim: str) -> str:
     d, color, icon = CARD_DATA[dim], DIMS[dim][1], ICONS[dim]
+    # Tinted glass background matching the dimension colour
+    tint = color + "0e"
     return (
-        f'<div class="sc" style="border-left-color:{color}">'
+        f'<div class="sc" style="border-left-color:{color};background:rgba(255,255,255,.68)">'
         f'<div class="sc-top">'
-        f'<div class="sc-icon" style="background:{color}14">{icon}</div>'
+        f'<div class="sc-icon" style="background:{color}18;box-shadow:0 0 0 1px {color}25">{icon}</div>'
         f'<div><div class="sc-stat" style="color:{color}">{d["stat"]}</div>'
         f'<div class="sc-lbl">{d["lbl"]}</div></div>'
         f'</div>'
@@ -486,12 +624,50 @@ def _story_card(dim: str) -> str:
 
 def _dim_bar(name: str, vuln: float) -> str:
     color, w = DIMS[name][1], DIMS[name][2]
+    # Gradient fill: solid colour → slightly lighter variant
+    grad = f"linear-gradient(90deg,{color},{color}bb)"
+    pct  = min(vuln, 100)
     return (
         f'<div class="db">'
-        f'<div class="db-h"><span>{name} <span style="font-size:.6rem;color:#bbb;font-weight:400">wt {int(w*100)}%</span></span>'
-        f'<span style="color:{color};font-weight:700">{vuln:.0f}</span></div>'
-        f'<div class="db-t"><div class="db-f" style="width:{min(vuln,100):.0f}%;background:{color}"></div></div>'
+        f'<div class="db-h">'
+        f'<span style="color:#374151">{name} <span style="font-size:.59rem;color:#94a3b8;font-weight:400">wt {int(w*100)}%</span></span>'
+        f'<span style="color:{color};font-weight:700;font-size:.72rem">{vuln:.0f}</span>'
         f'</div>'
+        f'<div class="db-t">'
+        f'<div class="db-f" style="width:{pct:.0f}%;background:{grad};box-shadow:0 0 6px {color}44"></div>'
+        f'</div>'
+        f'</div>'
+    )
+
+
+def _arc_gauge(score: float, color: str, label: str) -> str:
+    """Semicircular arc gauge SVG — score 0–100 fills left→right via top."""
+    cx, cy, r = 60, 64, 46
+    fill_rad = math.pi * (1.0 - score / 100.0)
+    fx = cx + r * math.cos(fill_rad)
+    fy = cy - r * math.sin(fill_rad)
+    large = 1 if score > 99.5 else 0
+    # Glow filter colour derived from main colour
+    return (
+        f'<svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width:140px;display:block;margin:0 auto">'
+        f'<defs><filter id="glow"><feGaussianBlur stdDeviation="2.5" result="blur"/>'
+        f'<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
+        # Background track
+        f'<path d="M {cx-r} {cy} A {r} {r} 0 0 0 {cx+r} {cy}" '
+        f'fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="9" stroke-linecap="round"/>'
+        # Coloured fill with glow
+        f'<path d="M {cx-r} {cy} A {r} {r} 0 {large} 0 {fx:.1f} {fy:.1f}" '
+        f'fill="none" stroke="{color}" stroke-width="9" stroke-linecap="round" filter="url(#glow)"/>'
+        # Score number
+        f'<text x="{cx}" y="{cy+2}" text-anchor="middle" '
+        f'font-family="Space Grotesk,sans-serif" font-size="23" font-weight="900" fill="{color}">'
+        f'{score:.0f}</text>'
+        # Label below
+        f'<text x="{cx}" y="{cy+16}" text-anchor="middle" '
+        f'font-family="Inter,sans-serif" font-size="7.5" font-weight="600" fill="#94a3b8">'
+        f'{label}</text>'
+        f'</svg>'
     )
 
 
@@ -507,18 +683,23 @@ def tab_map(df: pd.DataFrame) -> None:
     most_s  = df["resilience"].max()
     least_s = df["resilience"].min()
 
-    # Band legend rows
-    bands_html = ""
+    # Stacked distribution bar + legend rows
+    stacked_bar = '<div class="bl-bar">'
+    legend_rows = ""
     for lo, hi, label, color in RESILIENCE_BANDS:
         n   = int(((df["resilience"] >= lo) & (df["resilience"] < hi)).sum())
         pct = n / len(df) * 100
-        bands_html += (
+        if n > 0:
+            stacked_bar += f'<div style="flex:{pct:.2f};background:{color}" title="{label}: {n}"></div>'
+        legend_rows += (
             f'<div class="bl-row">'
             f'<div class="bl-dot" style="background:{color}"></div>'
-            f'<div class="bl-lbl">{label} ({lo}–{hi})</div>'
-            f'<div class="bl-cnt">{n} <span style="font-size:.58rem;font-weight:400;color:#ccc">({pct:.0f}%)</span></div>'
+            f'<div class="bl-lbl">{label} <span style="color:#cbd5e1">({lo}–{hi})</span></div>'
+            f'<div class="bl-cnt">{n} <span style="font-size:.58rem;font-weight:400;color:#94a3b8">({pct:.0f}%)</span></div>'
             f'</div>'
         )
+    stacked_bar += '</div>'
+    bands_html = stacked_bar + legend_rows
 
     # Single complete HTML for entire left panel
     left_html = f"""
@@ -547,13 +728,13 @@ def tab_map(df: pd.DataFrame) -> None:
   <hr class="lp-sep">
   <div class="lp-sec">Global extremes</div>
   <div style="display:flex;gap:8px">
-    <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:9px 11px;border:1px solid #bbf7d0;border-left:3px solid #16a34a">
-      <div style="font-size:.58rem;color:#16a34a;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Most Resilient</div>
+    <div class="ext-card" style="background:rgba(240,253,244,.85);border-left:3px solid #16a34a">
+      <div style="font-size:.57rem;color:#16a34a;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Most Resilient</div>
       <div style="font-size:.82rem;font-weight:700;color:#111;font-family:'Space Grotesk',sans-serif">{most_r}</div>
       <div style="font-size:.65rem;color:#16a34a;font-weight:700;margin-top:2px">{most_s:.0f} / 100</div>
     </div>
-    <div style="flex:1;background:#fef2f2;border-radius:8px;padding:9px 11px;border:1px solid #fecaca;border-left:3px solid #ef4444">
-      <div style="font-size:.58rem;color:#ef4444;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Most Vulnerable</div>
+    <div class="ext-card" style="background:rgba(254,242,242,.85);border-left:3px solid #ef4444">
+      <div style="font-size:.57rem;color:#ef4444;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Most Vulnerable</div>
       <div style="font-size:.82rem;font-weight:700;color:#111;font-family:'Space Grotesk',sans-serif">{least_r}</div>
       <div style="font-size:.65rem;color:#ef4444;font-weight:700;margin-top:2px">{least_s:.0f} / 100</div>
     </div>
@@ -615,16 +796,16 @@ def tab_map(df: pd.DataFrame) -> None:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Context cards — complete self-contained HTML
+        # Context cards
         st.markdown(
             '<div style="padding:0 22px 28px;display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-            '<div style="background:white;border-radius:8px;padding:13px 15px;border:1px solid rgba(0,0,0,0.06)">'
-            '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#f97316;margin-bottom:7px">The polycrisis dynamic</div>'
-            '<div style="font-size:.72rem;color:#555;line-height:1.68">Water stress amplifies food insecurity. Heat erodes economic output. Air pollution overwhelms health systems at the worst moment. Countries scoring lowest face <b style="color:#111">all seven pressures simultaneously</b> — with the least capacity to adapt.</div>'
+            '<div class="ctx-card">'
+            '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#f97316;margin-bottom:7px">The polycrisis dynamic</div>'
+            '<div style="font-size:.72rem;color:#475569;line-height:1.68">Water stress amplifies food insecurity. Heat erodes economic output. Air pollution overwhelms health systems at the worst moment. Countries scoring lowest face <b style="color:#111">all seven pressures simultaneously</b> — with the least capacity to adapt.</div>'
             '</div>'
-            '<div style="background:white;border-radius:8px;padding:13px 15px;border:1px solid rgba(0,0,0,0.06)">'
-            '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#3b82f6;margin-bottom:7px">The resilience gap</div>'
-            '<div style="font-size:.72rem;color:#555;line-height:1.68">The most resilient countries are temperate, wealthy, and diversified. The least resilient are disproportionately in the Global South — contributing the fewest emissions while absorbing the highest climate risk.</div>'
+            '<div class="ctx-card">'
+            '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#3b82f6;margin-bottom:7px">The resilience gap</div>'
+            '<div style="font-size:.72rem;color:#475569;line-height:1.68">The most resilient countries are temperate, wealthy, and diversified. The least resilient are disproportionately in the Global South — contributing the fewest emissions while absorbing the highest climate risk.</div>'
             '</div>'
             '</div>',
             unsafe_allow_html=True,
@@ -676,12 +857,13 @@ def tab_country(df: pd.DataFrame) -> None:
         gap         = abs(score - glb_avg)
         c1, c2      = DIMS[top1][1], DIMS[top2][1]
 
+        gauge_svg = _arc_gauge(score, bcolor, band_label)
         st.markdown(
             f'<div style="padding:4px 18px 44px">'
-            f'<div class="sb" style="background:{bcolor}12;border:1px solid {bcolor}25;margin-bottom:12px">'
-            f'<div class="sb-lbl" style="color:{bcolor}">Resilience Score</div>'
-            f'<div class="sb-val" style="color:{bcolor}">{score:.0f}</div>'
-            f'<div class="sb-sub">{band_label} · {sel}</div>'
+            f'<div class="sb" style="border:1px solid {bcolor}22;box-shadow:0 6px 28px {bcolor}14;margin-bottom:14px">'
+            f'<div class="sb-lbl" style="color:{bcolor}">{sel}</div>'
+            f'{gauge_svg}'
+            f'<div class="sb-band" style="color:{bcolor}">{band_label}</div>'
             f'</div>'
             f'<div class="lp-sec">Vulnerability by dimension (0&nbsp;=&nbsp;safe · 100&nbsp;=&nbsp;critical)</div>'
             f'{dims_html}'
@@ -844,7 +1026,7 @@ def tab_correlations(df: pd.DataFrame) -> None:
 
   <hr class="lp-sep">
 
-  <div style="background:#fff7f0;border-radius:9px;padding:14px 15px;border:1px solid rgba(249,115,22,0.15);border-left:3px solid #f97316;margin-bottom:12px">
+  <div class="compound-card">
     <div style="font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#f97316;margin-bottom:7px">The compounding dynamic</div>
     <div style="font-size:.78rem;font-weight:700;color:#111;font-family:'Space Grotesk',sans-serif;line-height:1.4;margin-bottom:7px">Not A + B + C, but A × B × C.</div>
     <div style="font-size:.7rem;color:#555;line-height:1.68">Water stress raises food prices. Insecurity undercuts stability. Weak economies limit energy investment. Fossil energy worsens air. Bad air degrades health. Each crisis feeds the others — the loop tightens.</div>
@@ -854,7 +1036,7 @@ def tab_correlations(df: pd.DataFrame) -> None:
   {insights_html}
 
   <hr class="lp-sep">
-  <div style="background:#f8fafc;border-radius:8px;padding:11px 13px;border:1px solid rgba(0,0,0,0.06)">
+  <div class="how-card">
     <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;margin-bottom:6px">How to read the heatmap →</div>
     <div style="font-size:.69rem;color:#64748b;line-height:1.65">
       <b style="color:#ef4444">Deep red (+1.0):</b> crises always strike together.<br>
@@ -984,7 +1166,7 @@ def tab_rankings(df: pd.DataFrame) -> None:
         st.markdown(
             f'<div style="padding:4px 18px 44px">'
             f'<hr class="lp-sep">'
-            f'<div style="background:#fef2f2;border-radius:8px;padding:11px 13px;border:1px solid #fecaca;margin-bottom:10px">'
+            f'<div class="risk-card" style="margin-bottom:10px">'
             f'<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#ef4444;margin-bottom:5px">Risk distribution</div>'
             f'<div style="font-size:.71rem;color:#555;line-height:1.65">'
             f'<b style="color:#7f1d1d">{n_crit} countries</b> Critical (score &lt; 20). '
