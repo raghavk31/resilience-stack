@@ -411,6 +411,30 @@ section.main { height: 100vh !important; overflow: hidden !important; background
   box-shadow: 0 1px 6px rgba(0,0,0,.04);
 }
 
+/* ── Pills — layer selector ───────────────────────── */
+[data-testid="stPillsInput"] {
+  flex-wrap: wrap !important; gap: 5px !important; padding: 0 !important;
+}
+[data-testid="stPillsInput"] button {
+  border-radius: 20px !important; font-size: .69rem !important;
+  font-weight: 600 !important; padding: 5px 13px !important;
+  border: 1px solid rgba(0,0,0,.1) !important;
+  background: rgba(255,255,255,.58) !important;
+  backdrop-filter: blur(8px) !important;
+  color: #64748b !important; transition: all .15s !important;
+  min-height: 0 !important; height: auto !important;
+}
+[data-testid="stPillsInput"] button:hover {
+  background: rgba(255,255,255,.82) !important;
+  border-color: rgba(0,0,0,.16) !important; color: #111 !important;
+}
+[data-testid="stPillsInput"] button[kind="pillsActive"],
+[data-testid="stPillsInput"] button[data-active="true"],
+[data-testid="stPillsInput"] button[aria-pressed="true"] {
+  background: #0f172a !important; border-color: #0f172a !important;
+  color: #fff !important; box-shadow: 0 2px 8px rgba(15,23,42,.22) !important;
+}
+
 /* ── Widget cleanup ──────────────────────────────── */
 section.main label, section.main [data-testid="stWidgetLabel"] p {
   font-size: .74rem !important; font-weight: 600 !important; color: #374151 !important;
@@ -423,8 +447,13 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   box-shadow: 0 1px 4px rgba(0,0,0,.06) !important;
 }
 [data-baseweb="select"] span { color: #374151 !important; }
+/* Tighter vertical gaps inside our scroll panels */
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) [data-testid="stMarkdown"],
 [data-testid="stHorizontalBlock"]:has(.mc-anchor) .stMarkdown { margin-bottom: 0 !important; }
+/* Pills wrapper spacing */
+[data-testid="stHorizontalBlock"]:has(.mc-anchor) [data-testid="stPillsInput"] {
+  padding: 0 18px !important;
+}
 </style>
 """
 
@@ -672,6 +701,38 @@ def _arc_gauge(score: float, color: str, label: str) -> str:
 
 
 # ── Tab 1 — Resilience Map ─────────────────────────────────────────────────────
+
+def _story_card_featured(dim: str) -> str:
+    """Full-width expanded story card — used when that layer is selected."""
+    d, color, icon = CARD_DATA[dim], DIMS[dim][1], ICONS[dim]
+    weight = int(DIMS[dim][2] * 100)
+    return (
+        f'<div style="border-radius:16px;padding:15px 16px 13px;'
+        f'background:rgba(255,255,255,.82);backdrop-filter:blur(16px);'
+        f'-webkit-backdrop-filter:blur(16px);'
+        f'border:1px solid rgba(255,255,255,.92);border-left:4px solid {color};'
+        f'box-shadow:0 4px 20px {color}1e,0 1px 4px rgba(0,0,0,.05);margin-bottom:4px">'
+        f'<div style="display:flex;align-items:flex-start;gap:11px;margin-bottom:9px">'
+        f'<div style="width:38px;height:38px;border-radius:50%;flex-shrink:0;'
+        f'background:{color}18;box-shadow:0 0 0 2px {color}30;'
+        f'display:flex;align-items:center;justify-content:center">{icon}</div>'
+        f'<div style="flex:1">'
+        f'<div style="font-family:Space Grotesk,sans-serif;font-size:1.5rem;'
+        f'font-weight:900;line-height:1;letter-spacing:-.5px;color:{color}">{d["stat"]}</div>'
+        f'<div style="font-size:.63rem;color:#64748b;margin-top:2px">{d["lbl"]}</div>'
+        f'</div>'
+        f'<div style="text-align:right;flex-shrink:0">'
+        f'<div style="font-size:.57rem;font-weight:700;text-transform:uppercase;'
+        f'letter-spacing:.1em;color:#94a3b8">composite wt.</div>'
+        f'<div style="font-size:.9rem;font-weight:800;color:{color};'
+        f'font-family:Space Grotesk,sans-serif;margin-top:1px">{weight}%</div>'
+        f'</div>'
+        f'</div>'
+        f'<div style="font-size:.73rem;color:#475569;line-height:1.65;margin-bottom:8px">{d["body"]}</div>'
+        f'<div style="font-size:.61rem;color:#94a3b8;font-style:italic">{d["src"]}</div>'
+        f'</div>'
+    )
+
 
 def tab_map(df: pd.DataFrame) -> None:
     n_crit  = int((df["resilience"] < 20).sum())
