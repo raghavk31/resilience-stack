@@ -421,22 +421,29 @@ def load_polycrisis_data() -> pd.DataFrame:
             df[col] = val
 
     df["heat_score"] = df["iso3"].map(HEAT_SCORE).fillna(DEFAULT_HEAT)
-    fp  = df["fossil_pct"].fillna(df["fossil_pct"].median())
-    ea  = df["elec_access"].fillna(df["elec_access"].median())
-    df["d_energy"] = (fp * 0.55 + (100 - ea) * 0.45).clip(0, 100)
-    ww  = df["water_withdrawal"].fillna(df["water_withdrawal"].median())
-    df["d_water"]  = (ww.clip(0, 150) / 150 * 100).clip(0, 100)
-    fn  = df["undernourishment"].fillna(df["undernourishment"].median())
-    df["d_food"]   = fn.clip(0, 100)
-    p25 = df["pm25"].fillna(df["pm25"].median())
-    df["d_air"]    = (p25 / 80 * 100).clip(0, 100)
-    df["d_heat"]   = df["heat_score"]
-    def _eco(g):
-        if pd.isna(g) or g <= 0: return 80.0
-        return max(0.0, 100.0 - math.log10(g) / math.log10(80_000) * 100)
-    df["d_eco"] = df["gdp_pc"].apply(_eco)
+
+    # Relative (percentile-rank) scoring: 0 = least vulnerable in cohort, 100 = most vulnerable.
+    # Absolute thresholds made most countries look resilient because real-world values
+    # cluster far below the theoretical maximums (e.g. water withdrawal rarely hits 150%).
+    def _pct(s: pd.Series) -> pd.Series:
+        return s.rank(pct=True).mul(100).fillna(50).clip(0, 100)
+
+    fp   = df["fossil_pct"].fillna(df["fossil_pct"].median())
+    ea   = df["elec_access"].fillna(df["elec_access"].median())
+    ww   = df["water_withdrawal"].fillna(df["water_withdrawal"].median())
+    fn   = df["undernourishment"].fillna(df["undernourishment"].median())
+    p25  = df["pm25"].fillna(df["pm25"].median())
+    gdp  = df["gdp_pc"].fillna(df["gdp_pc"].median())
     co2v = df["co2_pc"].fillna(df["co2_pc"].median())
-    df["d_co2"] = (co2v / 20 * 100).clip(0, 100)
+
+    df["d_energy"] = _pct(fp * 0.55 + (100 - ea) * 0.45)
+    df["d_water"]  = _pct(ww)
+    df["d_food"]   = _pct(fn)
+    df["d_air"]    = _pct(p25)
+    df["d_heat"]   = _pct(df["heat_score"])
+    # Economy: higher GDP → lower vulnerability; negate log so poor countries rank highest
+    df["d_eco"]    = _pct(gdp.clip(lower=1).apply(lambda x: -math.log10(x)))
+    df["d_co2"]    = _pct(co2v)
 
     dim_cols = [v[0] for v in DIMS.values()]
     weights  = [v[2] for v in DIMS.values()]
