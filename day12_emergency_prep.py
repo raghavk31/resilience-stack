@@ -21,17 +21,22 @@ st.set_page_config(
 
 
 def _get_api_key() -> str:
-    # 1. Already in environment (set externally or by a prior load)
+    # 1. Already in environment
     key = os.environ.get("OPENROUTER_API_KEY", "")
     if key:
         return key
-    # 2. Read .env file directly — works regardless of CWD or launch method
-    env_file = pathlib.Path(__file__).resolve().parent / ".env"
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line.startswith("OPENROUTER_API_KEY="):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    # 2. Check multiple .env locations
+    candidates = [
+        pathlib.Path(__file__).resolve().parent / ".env",
+        pathlib.Path(os.getcwd()) / ".env",
+        pathlib.Path.home() / "dev" / "climate-30" / ".env",
+    ]
+    for env_file in candidates:
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("OPENROUTER_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
     # 3. Streamlit Cloud secrets
     try:
         return st.secrets.get("OPENROUTER_API_KEY", "")
