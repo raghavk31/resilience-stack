@@ -11,9 +11,6 @@ import pathlib
 
 import requests
 import streamlit as st
-from dotenv import load_dotenv
-
-load_dotenv(pathlib.Path(__file__).resolve().parent / ".env")
 
 st.set_page_config(
     page_title="Emergency Prep Generator · Day 12",
@@ -22,7 +19,27 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
+
+def _get_api_key() -> str:
+    # 1. Already in environment (set externally or by a prior load)
+    key = os.environ.get("OPENROUTER_API_KEY", "")
+    if key:
+        return key
+    # 2. Read .env file directly — works regardless of CWD or launch method
+    env_file = pathlib.Path(__file__).resolve().parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("OPENROUTER_API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    # 3. Streamlit Cloud secrets
+    try:
+        return st.secrets.get("OPENROUTER_API_KEY", "")
+    except Exception:
+        return ""
+
+
+OPENROUTER_KEY = _get_api_key()
 MODEL = "anthropic/claude-sonnet-4-5"
 
 RISK_OPTIONS = [
