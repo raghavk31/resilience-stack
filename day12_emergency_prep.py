@@ -13,7 +13,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(pathlib.Path(__file__).resolve().parent / ".env")
 
 st.set_page_config(
     page_title="Emergency Prep Generator · Day 12",

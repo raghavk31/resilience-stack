@@ -13,7 +13,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(pathlib.Path(__file__).resolve().parent / ".env")
 
 st.set_page_config(
     page_title="Resilience Audit · Day 11",
