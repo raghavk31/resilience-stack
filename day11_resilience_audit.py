@@ -274,8 +274,10 @@ _CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700;800;900&display=swap');
 
+*, html, body { box-sizing: border-box; }
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #323232; }
 
+/* ── Background ── */
 .stApp {
   background:
     radial-gradient(ellipse at 15% 25%, rgba(249,115,22,.07) 0%, transparent 50%),
@@ -284,127 +286,164 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #323232; }
     #f7f8fa !important;
 }
 
-[data-testid="block-container"] { padding: 0 !important; max-width: 100% !important; background: transparent !important; }
+/* ── Strip Streamlit chrome padding ── */
+[data-testid="block-container"] {
+  padding: 0 !important; max-width: 100% !important; background: transparent !important;
+}
 section[data-testid="stSidebar"] { display: none !important; }
 [data-testid="stAppViewContainer"], section.main { background: transparent !important; }
 
+/* ── Top header bar ── */
 .mc-header {
-  background: rgba(255,255,255,.92);
+  background: rgba(255,255,255,.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(0,0,0,0.07);
-  padding: 16px 32px 12px;
+  padding: 14px 28px 10px;
 }
 .mc-topline {
   font-size: 10px; font-weight: 700; letter-spacing: .16em;
-  text-transform: uppercase; color: #bbb;
+  text-transform: uppercase; color: #b0b8c8;
   display: flex; align-items: center; gap: 8px;
 }
-.mc-dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid #bbb; display: inline-block; }
+.mc-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid #c0c8d4; display: inline-block; }
 
-[data-testid="stHorizontalBlock"]:has(.mc-left) { gap: 0 !important; }
-[data-testid="stHorizontalBlock"]:has(.mc-left) > [data-testid="column"]:first-child {
-  background: rgba(255,255,255,.82) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-right: 1px solid rgba(0,0,0,0.07) !important;
-  min-height: calc(100vh - 68px);
+/* ── Two-column layout ── */
+[data-testid="stHorizontalBlock"]:has(.mc-left) {
+  gap: 0 !important;
+  align-items: stretch !important;
 }
-[data-testid="stHorizontalBlock"]:has(.mc-left) > [data-testid="column"]:last-child {
+
+/* Left wizard panel */
+[data-testid="stHorizontalBlock"]:has(.mc-left) > [data-testid="stColumn"]:first-child {
+  background: rgba(255,255,255,.90) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-right: 1px solid rgba(0,0,0,0.08) !important;
+  min-height: calc(100vh - 60px);
+}
+
+/* Right results panel */
+[data-testid="stHorizontalBlock"]:has(.mc-left) > [data-testid="stColumn"]:last-child {
   background: transparent !important;
-  padding: 20px 28px !important;
+  padding: 24px 28px 32px !important;
 }
 
+/* Pad widget rows inside the left column */
+[data-testid="stHorizontalBlock"]:has(.mc-left) > [data-testid="stColumn"]:first-child
+  [data-testid="stRadio"] {
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+  padding-bottom: 6px !important;
+}
+
+/* Nav buttons row in the left column */
+[data-testid="stHorizontalBlock"]:has(.mc-left) > [data-testid="stColumn"]:first-child
+  [data-testid="stHorizontalBlock"]:not(:has(.mc-left)) {
+  padding: 2px 20px 0 !important;
+}
+
+/* ── Misc tokens ── */
 .mc-left  { height: 0; margin: 0; padding: 0; display: block; }
-.mc-pad   { padding: 20px 22px 14px; }
+.mc-pad   { padding: 18px 22px 12px; }
 .mc-title {
-  font-size: 1.25rem; font-weight: 800; color: #111; line-height: 1.2;
-  margin: 0 0 .35rem; letter-spacing: -.25px;
+  font-size: 1.18rem; font-weight: 800; color: #0f172a; line-height: 1.25;
+  margin: 0 0 .3rem; letter-spacing: -.2px;
   font-family: 'Space Grotesk', sans-serif;
 }
-.mc-desc  { font-size: .77rem; color: #94a3b8; line-height: 1.65; margin: 0; }
-.mc-sep   { border: none; border-top: 1px solid rgba(0,0,0,0.07); margin: 12px 0; }
-.mc-sec   { font-size: .67rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+.mc-desc  { font-size: .76rem; color: #94a3b8; line-height: 1.6; margin: 0; }
+.mc-sep   { border: none; border-top: 1px solid rgba(0,0,0,0.07); margin: 10px 0; }
+.mc-sec   { font-size: .66rem; font-weight: 700; color: #c8d2e0; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
 .mc-note  { font-size: .65rem; color: #94a3b8; line-height: 1.6; }
-.r-lbl    { font-size: .67rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+.r-lbl    { font-size: .65rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px; }
 
+/* ── Score badge ── */
 .score-badge {
-  border-radius: 14px; padding: 16px 18px; margin-bottom: 0;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border-radius: 14px; padding: 14px 18px; margin-bottom: 0;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
-.score-badge-lbl  { font-size: .67rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; }
-.score-badge-val  { font-size: 3.2rem; font-weight: 900; line-height: 1; letter-spacing: -2px; font-family: 'Space Grotesk', sans-serif; }
-.score-badge-band { font-size: .85rem; font-weight: 600; margin-top: 6px; }
+.score-badge-lbl  { font-size: .65rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; }
+.score-badge-val  { font-size: 3rem; font-weight: 900; line-height: 1; letter-spacing: -2px; font-family: 'Space Grotesk', sans-serif; }
+.score-badge-band { font-size: .82rem; font-weight: 600; margin-top: 5px; }
 
-section.main label, section.main [data-testid="stWidgetLabel"] p {
-  font-size: .75rem !important; font-weight: 500 !important; color: #555 !important;
-}
+/* ── Radio labels ── */
 section.main [data-testid="stRadio"] > label {
-  font-size: .72rem !important; font-weight: 600 !important; color: #333 !important;
-  margin-bottom: 3px !important;
+  font-size: .74rem !important; font-weight: 600 !important; color: #374151 !important;
+  margin-bottom: 4px !important;
 }
 section.main [data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
-  font-size: .72rem !important; color: #555 !important;
+  font-size: .74rem !important; color: #555 !important;
 }
 
+/* ── Buttons ── */
 section.main [data-testid="stButton"] > button {
   border-radius: 8px !important;
-  font-size: .74rem !important;
-  font-weight: 600 !important;
+  font-size: .74rem !important; font-weight: 600 !important;
   border: 1px solid rgba(0,0,0,.1) !important;
-  background: rgba(255,255,255,.75) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
+  background: rgba(255,255,255,.8) !important;
+  backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important;
   transition: all .15s !important;
+  padding: 6px 14px !important;
 }
 section.main [data-testid="stButton"] > button:hover {
-  background: rgba(255,255,255,.95) !important;
+  background: rgba(255,255,255,.97) !important;
   border-color: rgba(0,0,0,.18) !important;
 }
 section.main [data-testid="stButton"] > button[kind="primary"] {
-  background: #0f172a !important;
-  color: white !important;
-  border-color: #0f172a !important;
+  background: #0f172a !important; color: #fff !important; border-color: #0f172a !important;
 }
 section.main [data-testid="stButton"] > button[kind="primary"]:hover {
   background: #1e293b !important;
 }
 
+/* ── Copy link button ── */
 .copy-btn {
   display: flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 8px 14px; border-radius: 8px; width: 100%;
-  background: rgba(255,255,255,.75); backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  padding: 7px 14px; border-radius: 8px; width: 100%;
+  background: rgba(255,255,255,.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(0,0,0,.1); color: #374151;
   font-size: .72rem; font-weight: 600; cursor: pointer;
   transition: all .15s; font-family: Inter, sans-serif;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
   margin-top: 6px;
 }
-.copy-btn:hover { background: rgba(255,255,255,.95); border-color: rgba(0,0,0,.18); }
+.copy-btn:hover { background: rgba(255,255,255,.97); border-color: rgba(0,0,0,.18); }
 
+/* ── Action cards ── */
 .action-card {
-  background: rgba(255,255,255,.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
-  border: 1px solid rgba(255,255,255,.9);
-  border-left-width: 3px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.04);
+  background: rgba(255,255,255,.82);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px; overflow: hidden; margin-bottom: 10px;
+  border: 1px solid rgba(0,0,0,.07);
+  box-shadow: 0 1px 8px rgba(0,0,0,.04);
 }
+.action-card-body { padding: 12px 14px 14px; }
 .action-row {
-  background: rgba(248,250,252,.8);
+  background: rgba(248,250,252,.85);
   border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
   border: 1px solid rgba(0,0,0,.04);
 }
 
+/* ── Expander ── */
 section.main [data-testid="stExpander"] {
-  border: none !important; background: transparent !important;
-  margin-top: -6px !important;
+  border: 1px solid rgba(0,0,0,.06) !important;
+  background: rgba(255,255,255,.6) !important;
+  border-radius: 10px !important;
+  margin-top: 2px !important;
 }
 section.main [data-testid="stExpander"] summary {
-  font-size: .68rem !important; color: #94a3b8 !important; padding: 4px 0 !important;
+  font-size: .7rem !important; color: #64748b !important; padding: 8px 12px !important;
+  font-weight: 500 !important;
+}
+
+/* ── Radar legend row ── */
+.radar-legend {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  padding: 4px 0 12px; margin-top: -4px;
+}
+.radar-legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .68rem; color: #888;
 }
 </style>
 """
@@ -456,6 +495,7 @@ def decode_answers(s: str) -> dict:
 
 def _step_pills_html(current_step: int) -> str:
     pills = []
+    total = len(SECTIONS)
     for i, sec in enumerate(SECTIONS):
         icon = ICONS[sec["name"]]
         name = sec["name"]
@@ -476,15 +516,28 @@ def _step_pills_html(current_step: int) -> str:
             style = "background:rgba(255,255,255,.5);color:#94a3b8;border-color:rgba(0,0,0,.08);"
             label = f"{icon} {name}"
         pills.append(
-            f'<span style="display:inline-flex;align-items:center;gap:5px;'
-            f'padding:4px 10px;border-radius:20px;font-size:.64rem;'
-            f'border:1.5px solid;{style}">{label}</span>'
+            f'<span style="display:inline-flex;align-items:center;gap:4px;'
+            f'padding:3px 8px;border-radius:20px;font-size:.6rem;'
+            f'border:1.5px solid;{style};white-space:nowrap">{label}</span>'
         )
-    return (
-        '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:10px 22px 4px">'
+    active_color = SECTIONS[current_step]["color"]
+    pct = round((current_step + 1) / total * 100)
+    pills_row = (
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:10px 20px 6px;'
+        'align-items:center">'
         + "".join(pills)
+        + f'<span style="margin-left:auto;font-size:.6rem;font-weight:700;color:#94a3b8;'
+        f'white-space:nowrap;align-self:center">'
+        f'{current_step + 1} / {total}</span>'
         + "</div>"
     )
+    progress_bar = (
+        f'<div style="height:3px;background:rgba(0,0,0,.06);margin:0 20px 0">'
+        f'<div style="height:3px;width:{pct}%;background:{active_color};'
+        f'border-radius:2px;transition:width .3s ease"></div>'
+        f'</div>'
+    )
+    return pills_row + progress_bar
 
 
 def _action_row_html(title: str, detail: str, effort: str, effort_colors: dict) -> str:
@@ -519,6 +572,9 @@ def main() -> None:
     if "audit_initialized" not in st.session_state:
         st.session_state["audit_initialized"] = True
         st.session_state["current_step"] = 0
+        st.session_state["audit_done"] = False
+        st.session_state["audit_from_url"] = False
+        st.session_state["url_decode_error"] = False
         # Load URL params first; fall back to mid-range defaults
         # Session_state radio keys must be option strings, not integer indices
         if "a" in st.query_params:
@@ -530,8 +586,10 @@ def main() -> None:
                             n = len(q["options"])
                             idx = max(0, min(n - 1, loaded[q["key"]]))
                             st.session_state[f"q_{q['key']}"] = q["options"][idx][0]
+                st.session_state["audit_from_url"] = True
+                st.session_state["audit_done"] = True
             except Exception:
-                pass
+                st.session_state["url_decode_error"] = True
         # For keys not yet set (no URL param), seed with mid-range option string
         for k, v in _default_answers().items():
             if f"q_{k}" not in st.session_state:
@@ -550,7 +608,7 @@ def main() -> None:
             else:
                 current_answers[q["key"]] = n // 2
 
-    left, right = st.columns([1.15, 2.85], gap="large")
+    left, right = st.columns([1.45, 2.55], gap="small")
 
     # ── Left: wizard ──────────────────────────────────────────────────────────
     with left:
@@ -571,16 +629,16 @@ def main() -> None:
 
         # Section header with icon
         st.markdown(
-            f'<div style="padding:4px 22px 0">'
-            f'<hr class="mc-sep" style="margin-top:6px">'
-            f'<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'
-            f'<div style="width:36px;height:36px;border-radius:50%;'
+            f'<div style="padding:2px 22px 0">'
+            f'<hr class="mc-sep" style="margin:6px 0 8px">'
+            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+            f'<div style="width:30px;height:30px;border-radius:50%;flex-shrink:0;'
             f'background:{sec["color"]}1a;display:flex;align-items:center;'
-            f'justify-content:center;font-size:1.15rem">{ICONS[sec["name"]]}</div>'
+            f'justify-content:center;font-size:1rem">{ICONS[sec["name"]]}</div>'
             f'<div>'
-            f'<div style="font-size:.8rem;font-weight:700;color:{sec["color"]};'
+            f'<div style="font-size:.76rem;font-weight:700;color:{sec["color"]};'
             f'text-transform:uppercase;letter-spacing:.1em">{sec["name"]}</div>'
-            f'<div style="font-size:.67rem;color:#94a3b8">{sec["desc"]}</div>'
+            f'<div style="font-size:.64rem;color:#94a3b8">{sec["desc"]}</div>'
             f'</div></div></div>',
             unsafe_allow_html=True,
         )
@@ -588,16 +646,11 @@ def main() -> None:
         # Questions for this step
         for q in sec["questions"]:
             key = f"q_{q['key']}"
-            n = len(q["options"])
             opts = [o[0] for o in q["options"]]
-            st.markdown('<div style="padding:0 22px 2px">', unsafe_allow_html=True)
-            # index= only applies on first render; after that Streamlit uses session_state string
-            sel = st.radio(q["text"], opts, index=n // 2, key=key)
-            st.markdown("</div>", unsafe_allow_html=True)
+            sel = st.radio(q["text"], opts, key=key)
             current_answers[q["key"]] = opts.index(sel)
 
         # Navigation buttons
-        st.markdown('<div style="padding:6px 22px 0">', unsafe_allow_html=True)
         nav_l, nav_r = st.columns(2)
         with nav_l:
             if step > 0:
@@ -609,24 +662,28 @@ def main() -> None:
             label = "Done ✓" if is_last else "Next →"
             btn_type = "primary" if is_last else "secondary"
             if st.button(label, use_container_width=True, type=btn_type):
-                if not is_last:
+                if is_last:
+                    st.session_state["audit_done"] = True
+                    st.rerun()
+                else:
                     st.session_state["current_step"] = step + 1
                     st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
 
         # Reset + share
-        st.markdown(
-            '<div style="padding:0 22px 28px"><hr class="mc-sep">',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<hr class="mc-sep" style="margin:8px 20px 10px">', unsafe_allow_html=True)
+
+        st.markdown('<div style="padding:0 20px">', unsafe_allow_html=True)
         if st.button("↺ Reset all answers", use_container_width=True):
             for k, v in _default_answers().items():
                 st.session_state[f"q_{k}"] = v
             st.session_state["current_step"] = 0
+            st.session_state["audit_done"] = False
+            st.session_state["audit_from_url"] = False
+            st.session_state["url_decode_error"] = False
             st.rerun()
 
         st.markdown(
-            '<div class="mc-sec" style="margin-top:10px">Share your results</div>'
+            '<div class="mc-sec" style="margin-top:12px">Share your results</div>'
             '<div class="mc-note">The URL encodes your exact answers — copy it to share.</div>'
             '<button class="copy-btn" onclick="'
             "navigator.clipboard.writeText(window.location.href).then(function(){"
@@ -655,19 +712,97 @@ def main() -> None:
     # ── Right: results ────────────────────────────────────────────────────────
     with right:
 
+        audit_done = st.session_state.get("audit_done", False)
+        audit_from_url = st.session_state.get("audit_from_url", False)
+        show_results = audit_done or audit_from_url
+
+        # ── URL decode error notice ───────────────────────────────────────────
+        if st.session_state.get("url_decode_error"):
+            st.markdown(
+                '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);'
+                'border-radius:10px;padding:10px 14px;margin-bottom:12px;'
+                'font-size:.72rem;color:#92400e">'
+                '⚠️ That shared link was incomplete — starting fresh with default values.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        # ── Intro placeholder (fresh load, no URL params, not yet done) ──────
+        if not show_results:
+            dim_teaser = "".join(
+                f'<div style="text-align:center">'
+                f'<div style="font-size:1.5rem">{ICONS[s["name"]]}</div>'
+                f'<div style="font-size:.6rem;color:#94a3b8;margin-top:2px;'
+                f'text-transform:uppercase;letter-spacing:.08em">{s["name"]}</div>'
+                f'</div>'
+                for s in SECTIONS
+            )
+            st.markdown(
+                f'<div style="display:flex;flex-direction:column;align-items:center;'
+                f'justify-content:center;min-height:60vh;gap:28px;padding:32px 20px">'
+                f'<div style="text-align:center">'
+                f'<div style="font-size:2.8rem;font-weight:900;color:#e2e8f0;'
+                f'font-family:Space Grotesk,sans-serif;line-height:1;letter-spacing:-2px">?</div>'
+                f'<div style="font-size:1.05rem;font-weight:700;color:#1e293b;'
+                f'font-family:Space Grotesk,sans-serif;margin-top:12px;letter-spacing:-.2px">'
+                f'Your Resilience Score</div>'
+                f'<div style="font-size:.8rem;color:#94a3b8;margin-top:6px;line-height:1.6;max-width:340px">'
+                f'Work through all 5 steps on the left to see how you score across five dimensions of personal resilience.</div>'
+                f'</div>'
+                f'<div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap">'
+                f'{dim_teaser}'
+                f'</div>'
+                f'<div style="background:rgba(255,255,255,.7);backdrop-filter:blur(12px);'
+                f'-webkit-backdrop-filter:blur(12px);border:1px solid rgba(0,0,0,.08);'
+                f'border-radius:10px;padding:12px 20px;font-size:.74rem;color:#64748b;'
+                f'display:flex;align-items:center;gap:8px">'
+                f'<span>←</span> Start with <strong style="color:#374151">Energy</strong> — takes about 3 minutes'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            return
+
+        # ── Completion banner + mobile scroll trigger + share ─────────────────
+        if audit_done and not audit_from_url:
+            st.markdown(
+                '<div id="results-top"></div>'
+                '<script>window.scrollTo({top:document.getElementById("results-top")?.getBoundingClientRect()?.top+window.scrollY-20||9999,behavior:"smooth"});</script>'
+                f'<div style="background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.25);'
+                f'border-radius:12px;padding:12px 16px;margin-bottom:14px;'
+                f'display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+                f'<div style="display:flex;align-items:center;gap:10px">'
+                f'<span style="font-size:1.3rem">✅</span>'
+                f'<div>'
+                f'<div style="font-size:.78rem;font-weight:700;color:#15803d">Audit complete</div>'
+                f'<div style="font-size:.7rem;color:#64748b;margin-top:1px">'
+                f'Your action plan is below — sorted by biggest gap.</div>'
+                f'</div></div>'
+                f'<button class="copy-btn" style="width:auto;padding:6px 14px;margin:0" onclick="'
+                "navigator.clipboard.writeText(window.location.href).then(function(){"
+                "this.innerHTML='&#10003; Copied!';var b=this;"
+                "setTimeout(function(){b.innerHTML='&#8853; Share results'},1500);"
+                "}.bind(this))"
+                '">&#8853; Share results</button>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        elif audit_from_url:
+            st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
+
         # Score badge + per-dimension resilience pills
         dim_pills = "".join(
             f'<div style="text-align:center;padding:8px 12px;'
             f'background:rgba(255,255,255,.75);backdrop-filter:blur(10px);'
             f'-webkit-backdrop-filter:blur(10px);'
             f'border-radius:10px;border:1px solid rgba(255,255,255,.9);'
-            f'box-shadow:0 1px 4px rgba(0,0,0,.04)">'
-            f'<div style="font-size:1.1rem;margin-bottom:2px">{ICONS[s["name"]]}</div>'
-            f'<div style="font-size:1.1rem;font-weight:800;color:{s["color"]};'
+            f'box-shadow:0 1px 4px rgba(0,0,0,.04);min-width:52px">'
+            f'<div style="font-size:1rem;margin-bottom:2px">{ICONS[s["name"]]}</div>'
+            f'<div style="font-size:1.05rem;font-weight:800;color:{s["color"]};'
             f'font-family:Space Grotesk,sans-serif;line-height:1">'
             f'{100 - vuln[s["name"]]:.0f}</div>'
-            f'<div style="font-size:.58rem;color:#94a3b8;text-transform:uppercase;'
-            f'letter-spacing:.08em;margin-top:2px">{s["name"][:3]}</div>'
+            f'<div style="font-size:.6rem;color:#94a3b8;margin-top:3px;'
+            f'white-space:nowrap;letter-spacing:0">{s["name"]}</div>'
             f'</div>'
             for s in SECTIONS
         )
@@ -714,40 +849,38 @@ def main() -> None:
                     tickfont=dict(size=9, color="#ccc"),
                     gridcolor="rgba(0,0,0,0.07)",
                 ),
-                angularaxis=dict(tickfont=dict(size=11, color="#555")),
+                angularaxis=dict(tickfont=dict(size=12, color="#555")),
                 bgcolor="rgba(0,0,0,0)",
             ),
-            height=320,
+            height=300,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(family="Inter", color="#888", size=11),
-            margin=dict(l=30, r=30, t=12, b=12),
-            legend=dict(
-                orientation="h", y=-0.08, x=0.5, xanchor="center",
-                font=dict(size=9, color="#aaa"),
-                bgcolor="rgba(0,0,0,0)",
-            ),
+            margin=dict(l=40, r=40, t=16, b=8),
+            showlegend=False,
         )
 
-        r1, r2 = st.columns([2, 1])
-        with r1:
-            st.markdown(
-                '<div class="r-lbl">RESILIENCE RADAR — larger area = more resilient</div>',
-                unsafe_allow_html=True,
-            )
-            st.plotly_chart(rfig, use_container_width=True)
-        with r2:
-            st.markdown(
-                '<div class="r-lbl">How to read this</div>'
-                '<div class="mc-note" style="font-size:.71rem;color:#666;line-height:1.7">'
-                '<b style="color:#6366f1">Purple area</b> = your resilience. '
-                'Bigger = stronger.<br><br>'
-                'Dotted grey = typical person (50).<br><br>'
-                'Dotted red = high-risk threshold (25).<br><br>'
-                '<b>Score</b> = weighted resilience across all 5 dimensions.'
-                '</div>',
-                unsafe_allow_html=True,
-            )
+        st.markdown(
+            '<div class="r-lbl">RESILIENCE RADAR — larger area = more resilient</div>',
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(rfig, use_container_width=True)
+        st.markdown(
+            '<div class="radar-legend">'
+            '<span class="radar-legend-item">'
+            '<span style="width:12px;height:3px;background:#6366f1;border-radius:2px;display:inline-block"></span>'
+            'Your score</span>'
+            '<span class="radar-legend-item">'
+            '<span style="width:12px;height:2px;background:#94a3b8;border-radius:2px;display:inline-block;opacity:.6"></span>'
+            'Typical (~50)</span>'
+            '<span class="radar-legend-item">'
+            '<span style="width:12px;height:2px;background:#ef4444;border-radius:2px;display:inline-block;opacity:.7"></span>'
+            'High-risk (&lt;25)</span>'
+            '<span class="radar-legend-item" style="margin-left:auto;font-size:.64rem;color:#b0b8c8">'
+            'Score = weighted resilience across all 5 dimensions</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
         # Action plan
         st.markdown(
@@ -758,8 +891,7 @@ def main() -> None:
 
         effort_colors = {"Quick": "#16a34a", "Medium": "#f59e0b", "Longer-term": "#6366f1"}
 
-        for s in sorted_secs:
-            v = vuln[s["name"]]
+        def _render_action_card(s, v):
             r_score = round(100 - v)
             if v >= 60:
                 level, level_label, level_color = "critical", "Critical", "#ef4444"
@@ -775,35 +907,57 @@ def main() -> None:
             rows_html = "".join(
                 _action_row_html(t, d, e, effort_colors) for t, d, e in top_actions
             )
-
             st.markdown(
-                f'<div class="action-card" style="border-left-color:{s["color"]}">'
-                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+                f'<div class="action-card">'
+                # Header band — tinted fill, no left-border
+                f'<div style="background:{s["color"]}12;border-bottom:1px solid {s["color"]}22;'
+                f'padding:9px 14px;display:flex;justify-content:space-between;align-items:center">'
                 f'<div style="display:flex;align-items:center;gap:7px">'
-                f'<span style="font-size:1.1rem">{ICONS[s["name"]]}</span>'
-                f'<span style="font-size:.78rem;font-weight:700;color:{s["color"]};'
-                f'text-transform:uppercase;letter-spacing:.08em">{s["name"]}</span>'
+                f'<span style="font-size:1rem">{ICONS[s["name"]]}</span>'
+                f'<span style="font-size:.76rem;font-weight:700;color:{s["color"]};'
+                f'text-transform:uppercase;letter-spacing:.09em">{s["name"]}</span>'
                 f'</div>'
                 f'<div style="display:flex;align-items:center;gap:8px">'
-                f'<div style="font-size:.85rem;font-weight:800;color:{s["color"]};'
-                f'font-family:Space Grotesk,sans-serif">{r_score}</div>'
-                f'<div style="font-size:.68rem;font-weight:700;color:{level_color};'
-                f'background:{level_color}15;padding:2px 10px;border-radius:10px">'
-                f'{level_label}</div>'
+                f'<span style="font-size:.9rem;font-weight:800;color:{s["color"]};'
+                f'font-family:Space Grotesk,sans-serif;letter-spacing:-1px">{r_score}</span>'
+                f'<span style="font-size:.66rem;font-weight:700;color:{level_color};'
+                f'background:{level_color}15;padding:2px 9px;border-radius:9px">'
+                f'{level_label}</span>'
                 f'</div></div>'
-                f'{rows_html}'
+                # Body
+                f'<div class="action-card-body">{rows_html}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
-
             if extra_actions:
                 n_extra = len(extra_actions)
-                label = f"+ {n_extra} more action{'s' if n_extra > 1 else ''}"
-                with st.expander(label):
+                with st.expander(f"+ {n_extra} more action{'s' if n_extra > 1 else ''}"):
                     st.markdown(
                         "".join(_action_row_html(t, d, e, effort_colors) for t, d, e in extra_actions),
                         unsafe_allow_html=True,
                     )
+
+        priority_secs = [(s, vuln[s["name"]]) for s in sorted_secs if vuln[s["name"]] >= 35]
+        prepared_secs = [(s, vuln[s["name"]]) for s in sorted_secs if vuln[s["name"]] < 35]
+
+        for s, v in priority_secs:
+            _render_action_card(s, v)
+
+        if prepared_secs:
+            label = (
+                f"✓ {len(prepared_secs)} well-prepared area{'s' if len(prepared_secs) > 1 else ''}"
+            )
+            with st.expander(label):
+                for s, v in prepared_secs:
+                    _render_action_card(s, v)
+
+        if not priority_secs:
+            st.markdown(
+                '<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.78rem">'
+                '🎉 All dimensions are in good shape. Expand above to see maintenance actions.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
 
 if __name__ == "__main__":
