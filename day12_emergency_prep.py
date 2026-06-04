@@ -339,15 +339,20 @@ def _placeholder() -> None:
         '<div style="font-size:.8rem;color:#94a3b8;max-width:320px;line-height:1.65">'
         'Fill in your city, household, and budget on the left.<br>'
         'Claude generates a personalised plan in ~20 seconds.</div>'
-        '<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:4px">'
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px;max-width:400px">'
         + "".join(
-            f'<div style="font-size:.7rem;color:#cbd5e1;display:flex;align-items:center;gap:5px">'
-            f'<span>{icon}</span><span>{label}</span></div>'
+            f'<div style="display:flex;align-items:center;gap:6px;'
+            f'padding:7px 12px;border-radius:20px;'
+            f'background:rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.07);'
+            f'backdrop-filter:blur(8px)">'
+            f'<span style="font-size:1rem">{icon}</span>'
+            f'<span style="font-size:.72rem;font-weight:500;color:#64748b">{label}</span>'
+            f'</div>'
             for icon, label in [
                 ("🎒", "72-hr kit"),
                 ("💧", "Water plan"),
                 ("🍱", "Food & meds"),
-                ("📡", "Comms plan"),
+                ("📡", "Comms"),
                 ("🚗", "Evacuation"),
                 ("💰", "Budget"),
                 ("✅", "3 actions"),
@@ -380,13 +385,13 @@ def main() -> None:
         st.markdown('<span class="mc-left"></span>', unsafe_allow_html=True)
         st.markdown(
             '<div class="mc-pad">'
-            '<h2 class="mc-title">Emergency Preparedness Generator</h2>'
-            '<p class="mc-desc">Your city · your household · your budget.<br>'
-            'A personalised plan in about 20 seconds.</p>'
+            '<h2 class="mc-title">Emergency Plan Generator</h2>'
+            '<p class="mc-desc">City · household · budget → personalised plan in ~20 seconds.</p>'
             '</div>',
             unsafe_allow_html=True,
         )
 
+        # ── Essential fields (always visible) ──────────────────────────────
         city = st.text_input(
             "Your city or region",
             placeholder="e.g. Miami FL · rural Yorkshire UK · Lagos Nigeria",
@@ -399,44 +404,16 @@ def main() -> None:
         with c2:
             children = st.number_input("Children", min_value=0, max_value=20, value=0, key="children")
 
-        housing = st.radio(
-            "Housing type",
-            ["Apartment / flat", "House with garden", "Rural / farm", "Vehicle or boat"],
-            key="housing",
-        )
-
         budget = st.radio(
             "Preparedness budget",
-            ["Under $50", "$50–$150", "$150–$350", "$350–$750", "$750+"],
+            ["Under $50", "$50–150", "$150–350", "$350–750", "$750+"],
             index=1,
             key="budget",
         )
 
-        risks = st.multiselect(
-            "Primary risks in your area",
-            RISK_OPTIONS,
-            placeholder="Select all that apply",
-            key="risks",
-        )
+        st.markdown('<hr class="mc-sep" style="margin:8px 20px">', unsafe_allow_html=True)
 
-        special = st.multiselect(
-            "Special household needs",
-            SPECIAL_OPTIONS,
-            placeholder="Select if relevant",
-            key="special",
-        )
-
-        day11_gaps = st.text_input(
-            "Weak areas from Day 11 audit (optional)",
-            placeholder="e.g. Water, Food",
-            key="day11_gaps",
-            help="Paste your lowest-scoring dimensions from the Resilience Audit "
-                 "to focus this plan on your biggest gaps.",
-        )
-
-        st.markdown('<hr class="mc-sep" style="margin:10px 20px">', unsafe_allow_html=True)
-
-        st.markdown('<div style="padding:0 20px 28px">', unsafe_allow_html=True)
+        st.markdown('<div style="padding:0 20px 12px">', unsafe_allow_html=True)
         gen = st.button(
             "Generate my plan →",
             type="primary",
@@ -447,10 +424,38 @@ def main() -> None:
         if not city.strip():
             st.markdown(
                 '<div style="font-size:.68rem;color:#94a3b8;text-align:center;margin-top:4px">'
-                'Enter your city to enable</div>',
+                'Enter your city above to enable</div>',
                 unsafe_allow_html=True,
             )
         st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Optional details (collapsed) ─────────────────────────────────
+        with st.expander("+ More details (housing, risks, special needs)"):
+            housing = st.radio(
+                "Housing type",
+                ["Apartment / flat", "House with garden", "Rural / farm", "Vehicle or boat"],
+                key="housing",
+            )
+            risks = st.multiselect(
+                "Primary risks in your area",
+                RISK_OPTIONS,
+                placeholder="Select all that apply",
+                key="risks",
+            )
+            special = st.multiselect(
+                "Special household needs",
+                SPECIAL_OPTIONS,
+                placeholder="Select if relevant",
+                key="special",
+            )
+            day11_gaps = st.text_input(
+                "Weak areas from Day 11 audit (optional)",
+                placeholder="e.g. Water, Food",
+                key="day11_gaps",
+                help="Paste your lowest-scoring dimensions from the Resilience Audit "
+                     "to focus this plan on your biggest gaps.",
+            )
+
 
     # ── Right: plan ─────────────────────────────────────────────────────────────
     with right:
@@ -472,9 +477,15 @@ def main() -> None:
                     day11_gaps=day11_gaps.strip(),
                 )
                 st.markdown(
-                    f'<div class="mc-lbl" style="margin-bottom:10px">'
+                    f'<div class="mc-lbl" style="margin-bottom:6px">'
                     f'EMERGENCY PLAN — {city.upper()}'
-                    f'</div>',
+                    f'</div>'
+                    f'<div style="font-size:.74rem;color:#94a3b8;margin-bottom:12px;'
+                    f'display:flex;align-items:center;gap:6px">'
+                    f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+                    f'background:#f97316;animation:pulse 1.4s ease-in-out infinite"></span>'
+                    f'Claude is writing your plan…</div>'
+                    f'<style>@keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:.3}}}}</style>',
                     unsafe_allow_html=True,
                 )
                 st.markdown('<div class="plan-card plan-output">', unsafe_allow_html=True)
@@ -483,6 +494,13 @@ def main() -> None:
 
                 st.session_state["plan"] = plan_text
                 st.session_state["plan_city"] = city.strip()
+                # Mobile: scroll to the plan after generation completes
+                st.markdown(
+                    '<div id="plan-anchor"></div>'
+                    '<script>window.scrollTo({top:document.getElementById("plan-anchor")'
+                    '?.getBoundingClientRect()?.top+window.scrollY-20||9999,behavior:"smooth"});</script>',
+                    unsafe_allow_html=True,
+                )
 
                 st.markdown(
                     '<div style="margin-top:14px;display:flex;gap:8px">'
