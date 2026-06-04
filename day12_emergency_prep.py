@@ -7,6 +7,7 @@ City + household + budget → Claude-generated localised emergency plan.
 
 import json
 import os
+import pathlib
 
 import requests
 import streamlit as st
@@ -204,6 +205,18 @@ section.main [data-testid="stButton"] > button:disabled {
 </style>
 """
 
+_COPY_BTN_HTML = (
+    '<div style="margin-top:14px;display:flex;gap:8px">'
+    '<button class="copy-btn" onclick="'
+    "var t=document.querySelector('.plan-output')?.innerText||'';"
+    "navigator.clipboard.writeText(t).then(function(){"
+    "this.innerHTML='&#10003; Copied';var b=this;"
+    "setTimeout(function(){b.innerHTML='&#9112; Copy plan text'},1500);"
+    "}.bind(this))"
+    '">&#9112; Copy plan text</button>'
+    "</div>"
+)
+
 
 def build_prompt(
     city: str,
@@ -215,6 +228,8 @@ def build_prompt(
     risks: list,
     day11_gaps: str,
 ) -> str:
+    city = city.replace("\n", " ").replace("\r", " ")[:120]
+    day11_gaps = day11_gaps.replace("\n", " ").replace("\r", " ")[:300]
     household = f"{adults} adult{'s' if adults != 1 else ''}"
     if children:
         household += f" and {children} child{'ren' if children != 1 else ''}"
@@ -277,13 +292,14 @@ def stream_plan(prompt: str):
             json={
                 "model": MODEL,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 2800,
+                "max_tokens": 4000,
                 "stream": True,
             },
             stream=True,
             timeout=90,
         )
         resp.raise_for_status()
+        finish_reason = None
         for line in resp.iter_lines():
             if not line:
                 continue
@@ -293,11 +309,17 @@ def stream_plan(prompt: str):
                     break
                 try:
                     chunk = json.loads(data)
-                    delta = chunk["choices"][0]["delta"].get("content", "")
+                    choice = chunk["choices"][0]
+                    delta = choice["delta"].get("content", "")
                     if delta:
                         yield delta
+                    fr = choice.get("finish_reason")
+                    if fr:
+                        finish_reason = fr
                 except Exception:
                     pass
+        if finish_reason == "length":
+            yield "\n\n_Note: Plan was truncated. Try regenerating or reduce household complexity._"
     except requests.HTTPError as e:
         yield f"\n\n⚠️ API error ({e.response.status_code}): {e.response.text[:200]}"
     except Exception as e:
@@ -315,18 +337,7 @@ def _render_plan(plan_text: str, city: str) -> None:
     st.markdown('<div class="plan-card plan-output">', unsafe_allow_html=True)
     st.markdown(plan_text)
     st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown(
-        '<div style="margin-top:14px;display:flex;gap:8px">'
-        '<button class="copy-btn" onclick="'
-        "var t=document.querySelector('.plan-output')?.innerText||'';"
-        "navigator.clipboard.writeText(t).then(function(){"
-        "this.innerHTML='&#10003; Copied';var b=this;"
-        "setTimeout(function(){b.innerHTML='&#9112; Copy plan text'},1500);"
-        "}.bind(this))"
-        '">&#9112; Copy plan text</button>'
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(_COPY_BTN_HTML, unsafe_allow_html=True)
 
 
 def _placeholder() -> None:
@@ -364,6 +375,16 @@ def _placeholder() -> None:
 
 
 def main() -> None:
+    # T5: pre-fill day11_gaps from shared gaps file written by Day 11
+    if "day11_gaps" not in st.session_state:
+        try:
+            gaps_file = pathlib.Path(".resilience_gaps.json")
+            if gaps_file.exists():
+                data = json.loads(gaps_file.read_text())
+                st.session_state["day11_gaps"] = ", ".join(data.get("gaps", []))
+        except Exception:
+            pass
+
     st.markdown(_CSS, unsafe_allow_html=True)
 
     st.markdown(
@@ -492,8 +513,11 @@ def main() -> None:
                 plan_text = st.write_stream(stream_plan(prompt))
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                st.session_state["plan"] = plan_text
-                st.session_state["plan_city"] = city.strip()
+                # T1: only save valid plans — not None and not error strings
+                if plan_text and not plan_text.startswith("⚠️"):
+                    st.session_state["plan"] = plan_text
+                    st.session_state["plan_city"] = city.strip()
+
                 # Mobile: scroll to the plan after generation completes
                 st.markdown(
                     '<div id="plan-anchor"></div>'
@@ -501,19 +525,7 @@ def main() -> None:
                     '?.getBoundingClientRect()?.top+window.scrollY-20||9999,behavior:"smooth"});</script>',
                     unsafe_allow_html=True,
                 )
-
-                st.markdown(
-                    '<div style="margin-top:14px;display:flex;gap:8px">'
-                    '<button class="copy-btn" onclick="'
-                    "var t=document.querySelector('.plan-output')?.innerText||'';"
-                    "navigator.clipboard.writeText(t).then(function(){"
-                    "this.innerHTML='&#10003; Copied';var b=this;"
-                    "setTimeout(function(){b.innerHTML='&#9112; Copy plan text'},1500);"
-                    "}.bind(this))"
-                    '">&#9112; Copy plan text</button>'
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
+                st.markdown(_COPY_BTN_HTML, unsafe_allow_html=True)
 
         elif st.session_state.get("plan"):
             _render_plan(

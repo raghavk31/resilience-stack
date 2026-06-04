@@ -8,6 +8,7 @@ Action plan prioritised by weakest area. Shareable via URL encoding.
 
 import json
 import base64
+import pathlib
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -708,6 +709,14 @@ def main() -> None:
     resilience = compute_resilience(vuln)
     band, bcolor = _resilience_band(resilience)
     sorted_secs = sorted(SECTIONS, key=lambda s: vuln[s["name"]], reverse=True)
+
+    # T5: write weak dimensions for Day 12 to pre-fill its day11_gaps field
+    if st.session_state.get("audit_done") and not st.session_state.get("audit_from_url"):
+        try:
+            gaps = [s["name"] for s in sorted_secs if vuln[s["name"]] >= 35][:3]
+            pathlib.Path(".resilience_gaps.json").write_text(json.dumps({"gaps": gaps}))
+        except Exception:
+            pass
 
     # ── Right: results ────────────────────────────────────────────────────────
     with right:
