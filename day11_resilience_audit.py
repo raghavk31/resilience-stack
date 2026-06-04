@@ -11,6 +11,9 @@ import base64
 import pathlib
 import streamlit as st
 import plotly.graph_objects as go
+from dotenv import load_dotenv
+
+load_dotenv()
 
 st.set_page_config(
     page_title="Resilience Audit · Day 11",
