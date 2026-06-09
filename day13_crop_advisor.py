@@ -1128,8 +1128,43 @@ def _placeholder() -> None:
 
 # ── Global crop map helpers ─────────────────────────────────────────────────────
 
-def _fetch_climate_point_raw(lat: float, lon: float) -> dict | None:
-    """Single-point climate fetch without Streamlit cache — safe for threading."""
+_MAP_DATA_VERSION = 3  # bump to force-invalidate cached session data
+
+
+def _lat_climate_fallback(lat: float) -> dict:
+    """Latitude-based climate estimate — used when the API call fails so every
+    country still gets a colour on the choropleth."""
+    a = abs(lat)
+    if a < 10:
+        t, p, frost, heat = 26.5, 1900, 0.0, 140
+    elif a < 20:
+        t, p, frost, heat = 24.0, 1300, 0.0,  90
+    elif a < 30:
+        t, p, frost, heat = 20.0,  600, 0.0,  40
+    elif a < 35:
+        t, p, frost, heat = 16.5,  650, 5.0,  15
+    elif a < 42:
+        t, p, frost, heat = 13.0,  700, 20.0,  6
+    elif a < 50:
+        t, p, frost, heat =  9.0,  650, 55.0,  1
+    elif a < 58:
+        t, p, frost, heat =  5.0,  600, 100.0, 0
+    else:
+        t, p, frost, heat =  0.0,  450, 160.0, 0
+    return {"mean_temp": t, "annual_precip": float(p),
+            "frost_days": float(frost), "heat_stress_days": float(heat)}
+
+
+def _fetch_climate_point_raw(lat: float, lon: float) -> dict:
+    """Single-point climate fetch without Streamlit cache — safe for threading.
+    Falls back to a latitude estimate so the map has no grey holes."""
+    def _proj(base: dict, dt: float, dp: float, df: float, dh: float) -> dict:
+        return {
+            "mean_temp":        round(base["mean_temp"] + dt, 1),
+            "annual_precip":    round(base["annual_precip"] * dp, 0),
+            "frost_days":       max(0.0, round(base["frost_days"] * df, 1)),
+            "heat_stress_days": round(base["heat_stress_days"] * dh, 1),
+        }
     try:
         r = requests.get(
             ARCHIVE_URL,
@@ -1139,30 +1174,23 @@ def _fetch_climate_point_raw(lat: float, lon: float) -> dict | None:
                 "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
                 "timezone": "auto",
             },
-            headers=HEADERS, timeout=20,
+            headers=HEADERS, timeout=25,
         )
         r.raise_for_status()
         current = _parse_climate(r.json())
-        p2030 = {
-            "mean_temp":        round(current["mean_temp"] + 0.6, 1),
-            "annual_precip":    round(current["annual_precip"] * 0.97, 0),
-            "frost_days":       max(0.0, round(current["frost_days"] * 0.85, 1)),
-            "heat_stress_days": round(current["heat_stress_days"] * 1.30, 1),
-        }
-        p2040 = {
-            "mean_temp":        round(current["mean_temp"] + 1.1, 1),
-            "annual_precip":    round(current["annual_precip"] * 0.94, 0),
-            "frost_days":       max(0.0, round(current["frost_days"] * 0.70, 1)),
-            "heat_stress_days": round(current["heat_stress_days"] * 1.65, 1),
-        }
-        return {"current": current, "2030": p2030, "2040": p2040}
     except Exception:
-        return None
+        current = _lat_climate_fallback(lat)
+    return {
+        "current": current,
+        "2030":    _proj(current, 0.6, 0.97, 0.85, 1.30),
+        "2040":    _proj(current, 1.1, 0.94, 0.70, 1.65),
+    }
 
 
 @st.cache_data(ttl=86400 * 7, show_spinner=False)
-def fetch_global_map_climate() -> dict:
-    """Parallel fetch for all ~194 country centroids. Cached 7 days."""
+def fetch_global_map_climate(_version: int = _MAP_DATA_VERSION) -> dict:
+    """Parallel fetch for all ~194 country centroids. Cached 7 days.
+    The _version arg busts the cache automatically when _MAP_DATA_VERSION changes."""
     results = {}
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {
@@ -1172,8 +1200,7 @@ def fetch_global_map_climate() -> dict:
         for future in as_completed(futures):
             pt   = futures[future]
             data = future.result()
-            if data:
-                results[pt["iso3"]] = {"point": pt, "climate": data}
+            results[pt["iso3"]] = {"point": pt, "climate": data}
     return results
 
 
@@ -1205,6 +1232,11 @@ def _render_global_map_tab() -> None:
         )
     year_key = "current" if "Now" in map_year_label else map_year_label
 
+    # Invalidate stale session data from old formats
+    if st.session_state.get("_map_ver") != _MAP_DATA_VERSION:
+        st.session_state["global_map_data"] = None
+        st.session_state["_map_ver"] = _MAP_DATA_VERSION
+
     # Load / fetch data on demand
     if st.session_state.get("global_map_data") is None:
         col_btn, col_note = st.columns([1, 3])
@@ -1218,9 +1250,15 @@ def _render_global_map_tab() -> None:
             )
         if load:
             with st.spinner("Fetching climate data for ~194 country centroids … (~30 s)"):
-                st.session_state["global_map_data"] = fetch_global_map_climate()
+                st.session_state["global_map_data"] = fetch_global_map_climate(_MAP_DATA_VERSION)
             st.rerun()
         return
+
+    # Reload button (shown after data is loaded)
+    if st.button("↺ Reload data", key="reload_map"):
+        fetch_global_map_climate.clear()
+        st.session_state["global_map_data"] = None
+        st.rerun()
 
     global_data = st.session_state["global_map_data"]
     crop_info   = CROPS[map_crop]
@@ -1262,6 +1300,7 @@ def _render_global_map_tab() -> None:
 
     fig = go.Figure(go.Choropleth(
         locations=iso3_list,
+        locationmode="ISO-3",
         z=score_list,
         text=hover_text,
         hovertemplate="%{text}<extra></extra>",
@@ -1367,7 +1406,7 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    defaults = {"loc": None, "climate": None, "scores": [], "category": "All", "advice_data": None, "global_map_data": None}
+    defaults = {"loc": None, "climate": None, "scores": [], "category": "All", "advice_data": None, "global_map_data": None, "_map_ver": 0}
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
