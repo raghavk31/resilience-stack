@@ -88,104 +88,203 @@ CAT_COLORS = {
     "Cash Crops": "#6366f1",
 }
 
-GLOBAL_AGRICULTURAL_POINTS = [
-    # East Africa
-    {"name": "Nairobi",        "lat": -1.3,  "lon": 36.8,   "region": "East Africa"},
-    {"name": "Addis Ababa",    "lat":  9.0,  "lon": 38.7,   "region": "East Africa"},
-    {"name": "Dar es Salaam",  "lat": -6.8,  "lon": 39.3,   "region": "East Africa"},
-    {"name": "Kampala",        "lat":  0.3,  "lon": 32.6,   "region": "East Africa"},
-    {"name": "Kigali",         "lat": -1.9,  "lon": 30.1,   "region": "East Africa"},
-    # West Africa
-    {"name": "Lagos",          "lat":  6.5,  "lon":  3.4,   "region": "West Africa"},
-    {"name": "Accra",          "lat":  5.6,  "lon": -0.2,   "region": "West Africa"},
-    {"name": "Dakar",          "lat": 14.7,  "lon":-17.4,   "region": "West Africa"},
-    {"name": "Kano",           "lat": 12.0,  "lon":  8.5,   "region": "West Africa"},
-    {"name": "Bamako",         "lat": 12.6,  "lon": -8.0,   "region": "West Africa"},
-    {"name": "Ouagadougou",    "lat": 12.4,  "lon": -1.5,   "region": "West Africa"},
-    # Central Africa
-    {"name": "Kinshasa",       "lat": -4.3,  "lon": 15.3,   "region": "Central Africa"},
-    {"name": "Yaounde",        "lat":  3.9,  "lon": 11.5,   "region": "Central Africa"},
-    # Southern Africa
-    {"name": "Lusaka",         "lat":-15.4,  "lon": 28.3,   "region": "Southern Africa"},
-    {"name": "Harare",         "lat":-17.8,  "lon": 31.0,   "region": "Southern Africa"},
-    {"name": "Johannesburg",   "lat":-26.2,  "lon": 28.0,   "region": "Southern Africa"},
-    {"name": "Cape Town",      "lat":-33.9,  "lon": 18.4,   "region": "Southern Africa"},
-    {"name": "Lilongwe",       "lat":-13.9,  "lon": 33.8,   "region": "Southern Africa"},
-    # North Africa
-    {"name": "Cairo",          "lat": 30.1,  "lon": 31.2,   "region": "North Africa"},
-    {"name": "Khartoum",       "lat": 15.6,  "lon": 32.5,   "region": "North Africa"},
-    {"name": "Casablanca",     "lat": 33.6,  "lon": -7.6,   "region": "North Africa"},
-    {"name": "Tunis",          "lat": 36.8,  "lon": 10.2,   "region": "North Africa"},
-    # South Asia
-    {"name": "Delhi",          "lat": 28.6,  "lon": 77.2,   "region": "South Asia"},
-    {"name": "Mumbai",         "lat": 19.1,  "lon": 72.9,   "region": "South Asia"},
-    {"name": "Chennai",        "lat": 13.1,  "lon": 80.3,   "region": "South Asia"},
-    {"name": "Kolkata",        "lat": 22.6,  "lon": 88.4,   "region": "South Asia"},
-    {"name": "Dhaka",          "lat": 23.7,  "lon": 90.4,   "region": "South Asia"},
-    {"name": "Kathmandu",      "lat": 27.7,  "lon": 85.3,   "region": "South Asia"},
-    {"name": "Colombo",        "lat":  6.9,  "lon": 79.9,   "region": "South Asia"},
-    {"name": "Lahore",         "lat": 31.5,  "lon": 74.3,   "region": "South Asia"},
-    # Southeast Asia
-    {"name": "Bangkok",        "lat": 13.8,  "lon":100.5,   "region": "Southeast Asia"},
-    {"name": "Ho Chi Minh",    "lat": 10.8,  "lon":106.7,   "region": "Southeast Asia"},
-    {"name": "Manila",         "lat": 14.6,  "lon":121.0,   "region": "Southeast Asia"},
-    {"name": "Jakarta",        "lat": -6.2,  "lon":106.8,   "region": "Southeast Asia"},
-    {"name": "Yangon",         "lat": 16.9,  "lon": 96.2,   "region": "Southeast Asia"},
-    {"name": "Phnom Penh",     "lat": 11.6,  "lon":104.9,   "region": "Southeast Asia"},
-    {"name": "Kuala Lumpur",   "lat":  3.1,  "lon":101.7,   "region": "Southeast Asia"},
-    # East Asia
-    {"name": "Beijing",        "lat": 39.9,  "lon":116.4,   "region": "East Asia"},
-    {"name": "Shanghai",       "lat": 31.2,  "lon":121.5,   "region": "East Asia"},
-    {"name": "Guangzhou",      "lat": 23.1,  "lon":113.3,   "region": "East Asia"},
-    {"name": "Chengdu",        "lat": 30.7,  "lon":104.1,   "region": "East Asia"},
-    {"name": "Kunming",        "lat": 25.0,  "lon":102.7,   "region": "East Asia"},
-    {"name": "Seoul",          "lat": 37.6,  "lon":127.0,   "region": "East Asia"},
-    {"name": "Tokyo",          "lat": 35.7,  "lon":139.7,   "region": "East Asia"},
-    # Central Asia
-    {"name": "Tashkent",       "lat": 41.3,  "lon": 69.3,   "region": "Central Asia"},
-    {"name": "Almaty",         "lat": 43.3,  "lon": 77.0,   "region": "Central Asia"},
-    # Middle East
-    {"name": "Riyadh",         "lat": 24.7,  "lon": 46.7,   "region": "Middle East"},
-    {"name": "Tehran",         "lat": 35.7,  "lon": 51.4,   "region": "Middle East"},
-    {"name": "Istanbul",       "lat": 41.0,  "lon": 29.0,   "region": "Middle East"},
-    {"name": "Amman",          "lat": 31.9,  "lon": 35.9,   "region": "Middle East"},
-    {"name": "Baghdad",        "lat": 33.3,  "lon": 44.4,   "region": "Middle East"},
-    # Europe
-    {"name": "Madrid",         "lat": 40.4,  "lon": -3.7,   "region": "Europe"},
-    {"name": "Rome",           "lat": 41.9,  "lon": 12.5,   "region": "Europe"},
-    {"name": "Paris",          "lat": 48.9,  "lon":  2.3,   "region": "Europe"},
-    {"name": "Berlin",         "lat": 52.5,  "lon": 13.4,   "region": "Europe"},
-    {"name": "Kyiv",           "lat": 50.5,  "lon": 30.5,   "region": "Europe"},
-    {"name": "Moscow",         "lat": 55.8,  "lon": 37.6,   "region": "Europe"},
-    {"name": "Athens",         "lat": 37.9,  "lon": 23.7,   "region": "Europe"},
-    {"name": "Bucharest",      "lat": 44.4,  "lon": 26.1,   "region": "Europe"},
-    # North America
-    {"name": "Iowa Corn Belt", "lat": 41.9,  "lon":-93.6,   "region": "North America"},
-    {"name": "Kansas City",    "lat": 39.1,  "lon":-94.6,   "region": "North America"},
-    {"name": "Atlanta",        "lat": 33.7,  "lon":-84.4,   "region": "North America"},
-    {"name": "Mexico City",    "lat": 19.4,  "lon":-99.1,   "region": "North America"},
-    {"name": "Toronto",        "lat": 43.7,  "lon":-79.4,   "region": "North America"},
-    {"name": "Guadalajara",    "lat": 20.7,  "lon":-103.3,  "region": "North America"},
-    {"name": "Central Valley", "lat": 36.7,  "lon":-119.7,  "region": "North America"},
-    # Latin America
-    {"name": "Bogota",         "lat":  4.7,  "lon":-74.1,   "region": "Latin America"},
-    {"name": "Medellin",       "lat":  6.2,  "lon":-75.6,   "region": "Latin America"},
-    {"name": "Lima",           "lat":-12.0,  "lon":-77.0,   "region": "Latin America"},
-    {"name": "Sao Paulo",      "lat":-23.5,  "lon":-46.6,   "region": "Latin America"},
-    {"name": "Brasilia",       "lat":-15.8,  "lon":-47.9,   "region": "Latin America"},
-    {"name": "Manaus",         "lat": -3.1,  "lon":-60.0,   "region": "Latin America"},
-    {"name": "Buenos Aires",   "lat":-34.6,  "lon":-58.4,   "region": "Latin America"},
-    {"name": "Cordoba (AR)",   "lat":-31.4,  "lon":-64.2,   "region": "Latin America"},
-    {"name": "Santiago",       "lat":-33.5,  "lon":-70.6,   "region": "Latin America"},
-    {"name": "Havana",         "lat": 23.1,  "lon":-82.4,   "region": "Latin America"},
-    {"name": "Guatemala City", "lat": 14.6,  "lon":-90.5,   "region": "Latin America"},
-    # Australia / Oceania
-    {"name": "Sydney",         "lat":-33.9,  "lon":151.2,   "region": "Australia"},
-    {"name": "Melbourne",      "lat":-37.8,  "lon":144.9,   "region": "Australia"},
-    {"name": "Brisbane",       "lat":-27.5,  "lon":153.0,   "region": "Australia"},
-    {"name": "Perth",          "lat":-31.9,  "lon":115.9,   "region": "Australia"},
-    {"name": "Darwin",         "lat":-12.5,  "lon":130.8,   "region": "Australia"},
-    {"name": "Auckland",       "lat":-36.9,  "lon":174.8,   "region": "Australia"},
+# ISO 3166-1 alpha-3 country centroids — used by plotly choropleth (locationmode='ISO-3')
+COUNTRY_CENTROIDS = [
+    # ── Africa ──────────────────────────────────────────────────────────────────
+    {"iso3": "DZA", "name": "Algeria",                  "lat": 28.0,  "lon":   3.0},
+    {"iso3": "AGO", "name": "Angola",                   "lat":-11.2,  "lon":  17.9},
+    {"iso3": "BEN", "name": "Benin",                    "lat":  9.3,  "lon":   2.3},
+    {"iso3": "BWA", "name": "Botswana",                 "lat":-22.3,  "lon":  24.7},
+    {"iso3": "BFA", "name": "Burkina Faso",             "lat": 12.4,  "lon":  -1.5},
+    {"iso3": "BDI", "name": "Burundi",                  "lat": -3.4,  "lon":  29.9},
+    {"iso3": "CPV", "name": "Cabo Verde",               "lat": 15.1,  "lon": -23.6},
+    {"iso3": "CMR", "name": "Cameroon",                 "lat":  4.5,  "lon":  13.5},
+    {"iso3": "CAF", "name": "Central African Republic", "lat":  6.6,  "lon":  20.5},
+    {"iso3": "TCD", "name": "Chad",                     "lat": 15.5,  "lon":  18.7},
+    {"iso3": "COM", "name": "Comoros",                  "lat":-11.7,  "lon":  43.3},
+    {"iso3": "COD", "name": "DR Congo",                 "lat": -4.0,  "lon":  21.8},
+    {"iso3": "COG", "name": "Republic of Congo",        "lat": -0.2,  "lon":  15.8},
+    {"iso3": "CIV", "name": "Cote d'Ivoire",            "lat":  6.0,  "lon":  -5.5},
+    {"iso3": "DJI", "name": "Djibouti",                 "lat": 11.8,  "lon":  42.6},
+    {"iso3": "EGY", "name": "Egypt",                    "lat": 26.0,  "lon":  30.0},
+    {"iso3": "GNQ", "name": "Equatorial Guinea",        "lat":  1.7,  "lon":  10.3},
+    {"iso3": "ERI", "name": "Eritrea",                  "lat": 15.3,  "lon":  38.9},
+    {"iso3": "SWZ", "name": "Eswatini",                 "lat":-26.5,  "lon":  31.5},
+    {"iso3": "ETH", "name": "Ethiopia",                 "lat":  9.1,  "lon":  40.5},
+    {"iso3": "GAB", "name": "Gabon",                    "lat": -1.0,  "lon":  11.8},
+    {"iso3": "GMB", "name": "Gambia",                   "lat": 13.5,  "lon": -15.3},
+    {"iso3": "GHA", "name": "Ghana",                    "lat":  8.0,  "lon":  -1.0},
+    {"iso3": "GIN", "name": "Guinea",                   "lat": 11.0,  "lon": -10.9},
+    {"iso3": "GNB", "name": "Guinea-Bissau",            "lat": 11.8,  "lon": -15.2},
+    {"iso3": "KEN", "name": "Kenya",                    "lat": -1.3,  "lon":  36.8},
+    {"iso3": "LSO", "name": "Lesotho",                  "lat":-29.6,  "lon":  28.2},
+    {"iso3": "LBR", "name": "Liberia",                  "lat":  6.4,  "lon":  -9.4},
+    {"iso3": "LBY", "name": "Libya",                    "lat": 25.0,  "lon":  17.0},
+    {"iso3": "MDG", "name": "Madagascar",               "lat":-20.3,  "lon":  44.3},
+    {"iso3": "MWI", "name": "Malawi",                   "lat":-13.3,  "lon":  34.3},
+    {"iso3": "MLI", "name": "Mali",                     "lat": 17.6,  "lon":  -4.0},
+    {"iso3": "MRT", "name": "Mauritania",               "lat": 20.3,  "lon": -10.9},
+    {"iso3": "MUS", "name": "Mauritius",                "lat":-20.1,  "lon":  57.6},
+    {"iso3": "MAR", "name": "Morocco",                  "lat": 31.8,  "lon":  -7.1},
+    {"iso3": "MOZ", "name": "Mozambique",               "lat":-18.7,  "lon":  35.5},
+    {"iso3": "NAM", "name": "Namibia",                  "lat":-22.0,  "lon":  17.0},
+    {"iso3": "NER", "name": "Niger",                    "lat": 16.1,  "lon":   8.1},
+    {"iso3": "NGA", "name": "Nigeria",                  "lat":  9.1,  "lon":   8.7},
+    {"iso3": "RWA", "name": "Rwanda",                   "lat": -2.0,  "lon":  29.9},
+    {"iso3": "STP", "name": "Sao Tome & Principe",      "lat":  0.2,  "lon":   6.6},
+    {"iso3": "SEN", "name": "Senegal",                  "lat": 14.5,  "lon": -14.5},
+    {"iso3": "SLE", "name": "Sierra Leone",             "lat":  8.5,  "lon": -11.8},
+    {"iso3": "SOM", "name": "Somalia",                  "lat":  5.0,  "lon":  46.0},
+    {"iso3": "ZAF", "name": "South Africa",             "lat":-29.0,  "lon":  25.0},
+    {"iso3": "SSD", "name": "South Sudan",              "lat":  8.0,  "lon":  30.5},
+    {"iso3": "SDN", "name": "Sudan",                    "lat": 15.6,  "lon":  32.5},
+    {"iso3": "TZA", "name": "Tanzania",                 "lat": -6.4,  "lon":  35.0},
+    {"iso3": "TGO", "name": "Togo",                     "lat":  8.6,  "lon":   1.2},
+    {"iso3": "TUN", "name": "Tunisia",                  "lat": 34.0,  "lon":   9.0},
+    {"iso3": "UGA", "name": "Uganda",                   "lat":  1.4,  "lon":  32.0},
+    {"iso3": "ZMB", "name": "Zambia",                   "lat":-14.0,  "lon":  28.0},
+    {"iso3": "ZWE", "name": "Zimbabwe",                 "lat":-19.0,  "lon":  29.0},
+    # ── Asia ────────────────────────────────────────────────────────────────────
+    {"iso3": "AFG", "name": "Afghanistan",              "lat": 33.9,  "lon":  67.7},
+    {"iso3": "ARM", "name": "Armenia",                  "lat": 40.1,  "lon":  45.0},
+    {"iso3": "AZE", "name": "Azerbaijan",               "lat": 40.4,  "lon":  49.9},
+    {"iso3": "BHR", "name": "Bahrain",                  "lat": 26.0,  "lon":  50.6},
+    {"iso3": "BGD", "name": "Bangladesh",               "lat": 23.7,  "lon":  90.4},
+    {"iso3": "BTN", "name": "Bhutan",                   "lat": 27.5,  "lon":  90.4},
+    {"iso3": "BRN", "name": "Brunei",                   "lat":  4.9,  "lon": 114.9},
+    {"iso3": "KHM", "name": "Cambodia",                 "lat": 11.6,  "lon": 104.9},
+    {"iso3": "CHN", "name": "China",                    "lat": 35.0,  "lon": 103.8},
+    {"iso3": "CYP", "name": "Cyprus",                   "lat": 35.1,  "lon":  33.4},
+    {"iso3": "GEO", "name": "Georgia",                  "lat": 42.3,  "lon":  43.4},
+    {"iso3": "IND", "name": "India",                    "lat": 20.6,  "lon":  78.9},
+    {"iso3": "IDN", "name": "Indonesia",                "lat": -2.5,  "lon": 118.0},
+    {"iso3": "IRN", "name": "Iran",                     "lat": 32.4,  "lon":  53.7},
+    {"iso3": "IRQ", "name": "Iraq",                     "lat": 33.2,  "lon":  43.7},
+    {"iso3": "ISR", "name": "Israel",                   "lat": 31.5,  "lon":  35.0},
+    {"iso3": "JPN", "name": "Japan",                    "lat": 36.2,  "lon": 138.3},
+    {"iso3": "JOR", "name": "Jordan",                   "lat": 30.6,  "lon":  36.8},
+    {"iso3": "KAZ", "name": "Kazakhstan",               "lat": 48.0,  "lon":  66.9},
+    {"iso3": "KWT", "name": "Kuwait",                   "lat": 29.3,  "lon":  47.5},
+    {"iso3": "KGZ", "name": "Kyrgyzstan",               "lat": 41.2,  "lon":  74.8},
+    {"iso3": "LAO", "name": "Laos",                     "lat": 18.2,  "lon": 103.9},
+    {"iso3": "LBN", "name": "Lebanon",                  "lat": 33.9,  "lon":  35.9},
+    {"iso3": "MYS", "name": "Malaysia",                 "lat":  3.8,  "lon": 109.7},
+    {"iso3": "MDV", "name": "Maldives",                 "lat":  3.2,  "lon":  73.2},
+    {"iso3": "MNG", "name": "Mongolia",                 "lat": 46.9,  "lon": 103.8},
+    {"iso3": "MMR", "name": "Myanmar",                  "lat": 19.2,  "lon":  96.7},
+    {"iso3": "NPL", "name": "Nepal",                    "lat": 28.4,  "lon":  84.1},
+    {"iso3": "PRK", "name": "North Korea",              "lat": 40.3,  "lon": 127.5},
+    {"iso3": "OMN", "name": "Oman",                     "lat": 21.5,  "lon":  55.9},
+    {"iso3": "PAK", "name": "Pakistan",                 "lat": 30.4,  "lon":  69.3},
+    {"iso3": "PHL", "name": "Philippines",              "lat": 12.9,  "lon": 121.8},
+    {"iso3": "QAT", "name": "Qatar",                    "lat": 25.3,  "lon":  51.2},
+    {"iso3": "SAU", "name": "Saudi Arabia",             "lat": 23.9,  "lon":  45.1},
+    {"iso3": "SGP", "name": "Singapore",                "lat":  1.4,  "lon": 103.8},
+    {"iso3": "KOR", "name": "South Korea",              "lat": 36.5,  "lon": 127.9},
+    {"iso3": "LKA", "name": "Sri Lanka",                "lat":  7.9,  "lon":  80.8},
+    {"iso3": "SYR", "name": "Syria",                    "lat": 35.0,  "lon":  38.0},
+    {"iso3": "TJK", "name": "Tajikistan",               "lat": 38.9,  "lon":  71.3},
+    {"iso3": "THA", "name": "Thailand",                 "lat": 15.0,  "lon": 101.0},
+    {"iso3": "TLS", "name": "Timor-Leste",              "lat": -8.9,  "lon": 125.7},
+    {"iso3": "TKM", "name": "Turkmenistan",             "lat": 39.1,  "lon":  59.6},
+    {"iso3": "TUR", "name": "Turkey",                   "lat": 39.1,  "lon":  35.6},
+    {"iso3": "ARE", "name": "UAE",                      "lat": 24.5,  "lon":  54.5},
+    {"iso3": "UZB", "name": "Uzbekistan",               "lat": 41.4,  "lon":  64.6},
+    {"iso3": "VNM", "name": "Vietnam",                  "lat": 14.1,  "lon": 108.3},
+    {"iso3": "YEM", "name": "Yemen",                    "lat": 15.9,  "lon":  48.5},
+    # ── Europe ──────────────────────────────────────────────────────────────────
+    {"iso3": "ALB", "name": "Albania",                  "lat": 41.2,  "lon":  20.2},
+    {"iso3": "AND", "name": "Andorra",                  "lat": 42.5,  "lon":   1.6},
+    {"iso3": "AUT", "name": "Austria",                  "lat": 47.5,  "lon":  14.6},
+    {"iso3": "BLR", "name": "Belarus",                  "lat": 53.7,  "lon":  28.0},
+    {"iso3": "BEL", "name": "Belgium",                  "lat": 50.5,  "lon":   4.5},
+    {"iso3": "BIH", "name": "Bosnia & Herzegovina",     "lat": 44.2,  "lon":  17.9},
+    {"iso3": "BGR", "name": "Bulgaria",                 "lat": 42.7,  "lon":  25.5},
+    {"iso3": "HRV", "name": "Croatia",                  "lat": 45.1,  "lon":  15.2},
+    {"iso3": "CZE", "name": "Czech Republic",           "lat": 49.8,  "lon":  15.5},
+    {"iso3": "DNK", "name": "Denmark",                  "lat": 56.3,  "lon":   9.5},
+    {"iso3": "EST", "name": "Estonia",                  "lat": 58.6,  "lon":  25.0},
+    {"iso3": "FIN", "name": "Finland",                  "lat": 61.9,  "lon":  25.7},
+    {"iso3": "FRA", "name": "France",                   "lat": 46.2,  "lon":   2.2},
+    {"iso3": "DEU", "name": "Germany",                  "lat": 51.2,  "lon":  10.4},
+    {"iso3": "GRC", "name": "Greece",                   "lat": 39.1,  "lon":  22.0},
+    {"iso3": "HUN", "name": "Hungary",                  "lat": 47.2,  "lon":  19.5},
+    {"iso3": "ISL", "name": "Iceland",                  "lat": 64.7,  "lon": -18.0},
+    {"iso3": "IRL", "name": "Ireland",                  "lat": 53.1,  "lon":  -8.2},
+    {"iso3": "ITA", "name": "Italy",                    "lat": 42.5,  "lon":  12.6},
+    {"iso3": "LVA", "name": "Latvia",                   "lat": 57.0,  "lon":  25.0},
+    {"iso3": "LIE", "name": "Liechtenstein",            "lat": 47.2,  "lon":   9.6},
+    {"iso3": "LTU", "name": "Lithuania",                "lat": 55.9,  "lon":  23.9},
+    {"iso3": "LUX", "name": "Luxembourg",               "lat": 49.8,  "lon":   6.1},
+    {"iso3": "MLT", "name": "Malta",                    "lat": 35.9,  "lon":  14.5},
+    {"iso3": "MDA", "name": "Moldova",                  "lat": 47.4,  "lon":  28.4},
+    {"iso3": "MNE", "name": "Montenegro",               "lat": 42.8,  "lon":  19.4},
+    {"iso3": "NLD", "name": "Netherlands",              "lat": 52.1,  "lon":   5.3},
+    {"iso3": "MKD", "name": "North Macedonia",          "lat": 41.6,  "lon":  21.7},
+    {"iso3": "NOR", "name": "Norway",                   "lat": 60.5,  "lon":   8.5},
+    {"iso3": "POL", "name": "Poland",                   "lat": 52.1,  "lon":  19.4},
+    {"iso3": "PRT", "name": "Portugal",                 "lat": 39.6,  "lon":  -8.0},
+    {"iso3": "ROU", "name": "Romania",                  "lat": 45.9,  "lon":  24.9},
+    {"iso3": "RUS", "name": "Russia",                   "lat": 61.5,  "lon": 105.3},
+    {"iso3": "SRB", "name": "Serbia",                   "lat": 44.0,  "lon":  21.0},
+    {"iso3": "SVK", "name": "Slovakia",                 "lat": 48.7,  "lon":  19.7},
+    {"iso3": "SVN", "name": "Slovenia",                 "lat": 46.2,  "lon":  14.8},
+    {"iso3": "ESP", "name": "Spain",                    "lat": 40.0,  "lon":  -4.0},
+    {"iso3": "SWE", "name": "Sweden",                   "lat": 60.1,  "lon":  18.6},
+    {"iso3": "CHE", "name": "Switzerland",              "lat": 46.8,  "lon":   8.2},
+    {"iso3": "UKR", "name": "Ukraine",                  "lat": 49.0,  "lon":  31.5},
+    {"iso3": "GBR", "name": "United Kingdom",           "lat": 54.5,  "lon":  -3.4},
+    # ── Americas ────────────────────────────────────────────────────────────────
+    {"iso3": "ATG", "name": "Antigua & Barbuda",        "lat": 17.1,  "lon": -61.8},
+    {"iso3": "ARG", "name": "Argentina",                "lat":-34.6,  "lon": -58.4},
+    {"iso3": "BHS", "name": "Bahamas",                  "lat": 24.2,  "lon": -76.0},
+    {"iso3": "BRB", "name": "Barbados",                 "lat": 13.2,  "lon": -59.5},
+    {"iso3": "BLZ", "name": "Belize",                   "lat": 17.3,  "lon": -88.5},
+    {"iso3": "BOL", "name": "Bolivia",                  "lat":-17.1,  "lon": -64.7},
+    {"iso3": "BRA", "name": "Brazil",                   "lat":-10.0,  "lon": -55.0},
+    {"iso3": "CAN", "name": "Canada",                   "lat": 56.1,  "lon":-106.3},
+    {"iso3": "CHL", "name": "Chile",                    "lat":-30.0,  "lon": -71.0},
+    {"iso3": "COL", "name": "Colombia",                 "lat":  4.6,  "lon": -74.3},
+    {"iso3": "CRI", "name": "Costa Rica",               "lat":  9.7,  "lon": -83.8},
+    {"iso3": "CUB", "name": "Cuba",                     "lat": 21.6,  "lon": -79.0},
+    {"iso3": "DMA", "name": "Dominica",                 "lat": 15.4,  "lon": -61.4},
+    {"iso3": "DOM", "name": "Dominican Republic",       "lat": 18.7,  "lon": -70.2},
+    {"iso3": "ECU", "name": "Ecuador",                  "lat": -1.8,  "lon": -78.2},
+    {"iso3": "SLV", "name": "El Salvador",              "lat": 13.8,  "lon": -88.9},
+    {"iso3": "GRD", "name": "Grenada",                  "lat": 12.1,  "lon": -61.7},
+    {"iso3": "GTM", "name": "Guatemala",                "lat": 15.8,  "lon": -90.2},
+    {"iso3": "GUY", "name": "Guyana",                   "lat":  4.9,  "lon": -58.9},
+    {"iso3": "HTI", "name": "Haiti",                    "lat": 19.1,  "lon": -72.3},
+    {"iso3": "HND", "name": "Honduras",                 "lat": 15.2,  "lon": -86.2},
+    {"iso3": "JAM", "name": "Jamaica",                  "lat": 18.1,  "lon": -77.3},
+    {"iso3": "MEX", "name": "Mexico",                   "lat": 23.6,  "lon":-102.5},
+    {"iso3": "NIC", "name": "Nicaragua",                "lat": 12.8,  "lon": -85.2},
+    {"iso3": "PAN", "name": "Panama",                   "lat":  8.5,  "lon": -80.8},
+    {"iso3": "PRY", "name": "Paraguay",                 "lat":-23.4,  "lon": -58.4},
+    {"iso3": "PER", "name": "Peru",                     "lat": -9.2,  "lon": -75.0},
+    {"iso3": "KNA", "name": "Saint Kitts & Nevis",      "lat": 17.3,  "lon": -62.7},
+    {"iso3": "LCA", "name": "Saint Lucia",              "lat": 13.9,  "lon": -60.8},
+    {"iso3": "VCT", "name": "St Vincent & Grenadines",  "lat": 13.3,  "lon": -61.2},
+    {"iso3": "SUR", "name": "Suriname",                 "lat":  3.9,  "lon": -56.0},
+    {"iso3": "TTO", "name": "Trinidad & Tobago",        "lat": 10.7,  "lon": -61.2},
+    {"iso3": "USA", "name": "United States",            "lat": 37.1,  "lon": -95.7},
+    {"iso3": "URY", "name": "Uruguay",                  "lat":-32.5,  "lon": -55.8},
+    {"iso3": "VEN", "name": "Venezuela",                "lat":  8.0,  "lon": -66.6},
+    # ── Oceania ──────────────────────────────────────────────────────────────────
+    {"iso3": "AUS", "name": "Australia",                "lat":-25.3,  "lon": 133.8},
+    {"iso3": "FJI", "name": "Fiji",                     "lat":-17.7,  "lon": 178.1},
+    {"iso3": "KIR", "name": "Kiribati",                 "lat":  1.9,  "lon":-157.4},
+    {"iso3": "MHL", "name": "Marshall Islands",         "lat":  7.1,  "lon": 171.2},
+    {"iso3": "FSM", "name": "Micronesia",               "lat":  6.9,  "lon": 158.2},
+    {"iso3": "NRU", "name": "Nauru",                    "lat": -0.5,  "lon": 166.9},
+    {"iso3": "NZL", "name": "New Zealand",              "lat":-41.3,  "lon": 172.5},
+    {"iso3": "PLW", "name": "Palau",                    "lat":  7.5,  "lon": 134.6},
+    {"iso3": "PNG", "name": "Papua New Guinea",         "lat": -6.3,  "lon": 143.6},
+    {"iso3": "WSM", "name": "Samoa",                    "lat":-13.8,  "lon":-172.1},
+    {"iso3": "SLB", "name": "Solomon Islands",          "lat": -9.6,  "lon": 160.2},
+    {"iso3": "TON", "name": "Tonga",                    "lat":-20.5,  "lon":-175.2},
+    {"iso3": "TUV", "name": "Tuvalu",                   "lat": -8.5,  "lon": 179.2},
+    {"iso3": "VUT", "name": "Vanuatu",                  "lat":-15.4,  "lon": 166.9},
 ]
 
 _CSS = """
@@ -1063,41 +1162,30 @@ def _fetch_climate_point_raw(lat: float, lon: float) -> dict | None:
 
 @st.cache_data(ttl=86400 * 7, show_spinner=False)
 def fetch_global_map_climate() -> dict:
-    """Parallel fetch for all 86 global agricultural points. Cached 7 days."""
+    """Parallel fetch for all ~194 country centroids. Cached 7 days."""
     results = {}
-    with ThreadPoolExecutor(max_workers=14) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {
             executor.submit(_fetch_climate_point_raw, pt["lat"], pt["lon"]): pt
-            for pt in GLOBAL_AGRICULTURAL_POINTS
+            for pt in COUNTRY_CENTROIDS
         }
         for future in as_completed(futures):
             pt   = futures[future]
             data = future.result()
             if data:
-                results[pt["name"]] = {"point": pt, "climate": data}
+                results[pt["iso3"]] = {"point": pt, "climate": data}
     return results
 
 
-def _score_color(score: int) -> list[int]:
-    if score >= 70:
-        return [22, 163, 74, 215]
-    if score >= 45:
-        return [217, 119, 6, 215]
-    return [220, 38, 38, 215]
-
-
 def _render_global_map_tab() -> None:
-    """Global crop suitability map: 86 agricultural zones, 3 time periods."""
-    try:
-        import pydeck as pdk
-    except ImportError:
-        st.error("pydeck is required for the map. Run: pip install pydeck")
-        return
+    """Global crop suitability choropleth — ~194 countries, 3 time periods."""
+    import plotly.graph_objects as go
 
     st.markdown(
         '<div class="map-desc">'
-        'Select a crop and time period. Each dot = one agricultural zone, coloured by climate suitability score (0–100).<br>'
-        'Data: Open-Meteo archive 2019–2023 (current) · EC_Earth3P_HR fallback deltas for 2030/2040 · 86 zones worldwide.'
+        'Select a crop and time period. Each country is filled by its climate suitability score — '
+        'dark red = no fit, amber = marginal, green = well suited.<br>'
+        'Data: Open-Meteo archive 2019–2023 (baseline) · EC_Earth3P_HR delta projections for 2030 / 2040 · ~194 countries.'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -1117,7 +1205,7 @@ def _render_global_map_tab() -> None:
         )
     year_key = "current" if "Now" in map_year_label else map_year_label
 
-    # Load global data on demand
+    # Load / fetch data on demand
     if st.session_state.get("global_map_data") is None:
         col_btn, col_note = st.columns([1, 3])
         with col_btn:
@@ -1125,11 +1213,11 @@ def _render_global_map_tab() -> None:
         with col_note:
             st.markdown(
                 '<div style="font-size:.71rem;color:#94a3b8;padding-top:10px">'
-                'Fetches 86-point climate dataset in parallel (~25 s first run, then cached 7 days).</div>',
+                'Fetches ~194-country climate dataset in parallel (~30 s first run, cached 7 days).</div>',
                 unsafe_allow_html=True,
             )
         if load:
-            with st.spinner("Fetching climate data for 86 global agricultural zones … (~25 s)"):
+            with st.spinner("Fetching climate data for ~194 country centroids … (~30 s)"):
                 st.session_state["global_map_data"] = fetch_global_map_climate()
             st.rerun()
         return
@@ -1137,77 +1225,101 @@ def _render_global_map_tab() -> None:
     global_data = st.session_state["global_map_data"]
     crop_info   = CROPS[map_crop]
 
-    rows = []
-    for name, item in global_data.items():
-        pt   = item["point"]
+    iso3_list, name_list, score_list, label_list, temp_list, precip_list = [], [], [], [], [], []
+    for iso3, item in global_data.items():
         clim = item["climate"].get(year_key)
         if not clim:
             continue
         score = score_crop(crop_info, clim)
         label, _ = classify(score)
-        rows.append({
-            "name":   name,
-            "region": pt["region"],
-            "lat":    pt["lat"],
-            "lon":    pt["lon"],
-            "score":  score,
-            "label":  label,
-            "temp":   clim["mean_temp"],
-            "precip": int(clim["annual_precip"]),
-            "color":  _score_color(score),
-        })
+        iso3_list.append(iso3)
+        name_list.append(item["point"]["name"])
+        score_list.append(score)
+        label_list.append(label)
+        temp_list.append(clim["mean_temp"])
+        precip_list.append(int(clim["annual_precip"]))
 
-    if not rows:
-        st.warning("No data loaded. Click 'Load global climate data'.")
+    if not iso3_list:
+        st.warning("No climate data available. Click 'Load global climate data'.")
         return
 
-    df = pd.DataFrame(rows)
+    hover_text = [
+        f"<b>{n}</b><br>{lbl}: {s}/100<br>🌡️ {t}°C · 🌧️ {p} mm/yr"
+        for n, lbl, s, t, p in zip(name_list, label_list, score_list, temp_list, precip_list)
+    ]
 
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=df,
-        get_position=["lon", "lat"],
-        get_color="color",
-        get_radius=260000,
-        pickable=True,
-        opacity=0.88,
-        stroked=True,
-        line_width_min_pixels=1,
-        get_line_color=[255, 255, 255, 55],
+    # Continuous red→amber→green scale anchored at suitability thresholds
+    colorscale = [
+        [0.00, "#7f1d1d"],   # 0   — completely unsuited
+        [0.15, "#dc2626"],   # 15
+        [0.35, "#f97316"],   # 35
+        [0.45, "#fbbf24"],   # 45  — marginal threshold
+        [0.55, "#a3e635"],   # 55
+        [0.70, "#22c55e"],   # 70  — well-suited threshold
+        [0.85, "#15803d"],   # 85
+        [1.00, "#052e16"],   # 100 — ideal
+    ]
+
+    fig = go.Figure(go.Choropleth(
+        locations=iso3_list,
+        z=score_list,
+        text=hover_text,
+        hovertemplate="%{text}<extra></extra>",
+        colorscale=colorscale,
+        zmin=0,
+        zmax=100,
+        marker=dict(
+            line=dict(color="rgba(255,255,255,0.45)", width=0.5),
+            opacity=0.92,
+        ),
+        colorbar=dict(
+            title=dict(text="Score", font=dict(size=11, color="#374151")),
+            tickvals=[0, 45, 70, 100],
+            ticktext=["0 — No fit", "45 — Marginal", "70 — Suited", "100 — Ideal"],
+            len=0.7,
+            thickness=14,
+            x=1.01,
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(0,0,0,0.07)",
+            borderwidth=1,
+            tickfont=dict(size=10, color="#374151"),
+        ),
+    ))
+
+    fig.update_layout(
+        geo=dict(
+            showframe=False,
+            showcoastlines=True,
+            coastlinecolor="rgba(150,170,190,0.6)",
+            coastlinewidth=0.5,
+            showland=True,
+            landcolor="rgba(236,239,236,1)",
+            showocean=True,
+            oceancolor="rgba(210,228,242,0.85)",
+            showlakes=True,
+            lakecolor="rgba(210,228,242,0.85)",
+            showrivers=False,
+            showcountries=True,
+            countrycolor="rgba(180,195,210,0.4)",
+            countrywidth=0.3,
+            projection_type="natural earth",
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=70, t=0, b=0),
+        height=530,
+        font=dict(family="Inter, sans-serif", size=11, color="#374151"),
     )
 
-    deck = pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(latitude=15, longitude=15, zoom=1.15, pitch=0),
-        tooltip={
-            "html": (
-                "<div style='font-family:Inter,sans-serif;padding:9px 13px;min-width:170px'>"
-                "<div style='font-size:13px;font-weight:700;margin-bottom:2px'>{name}</div>"
-                "<div style='font-size:11px;color:#94a3b8;margin-bottom:8px'>{region}</div>"
-                "<div style='font-size:12px;font-weight:600'>{label} &bull; {score} / 100</div>"
-                "<div style='font-size:11px;margin-top:5px'>🌡️ {temp}°C &nbsp;·&nbsp; 🌧️ {precip} mm/yr</div>"
-                "</div>"
-            ),
-            "style": {
-                "backgroundColor": "rgba(15,23,42,0.93)",
-                "color": "white",
-                "borderRadius": "10px",
-                "border": "1px solid rgba(255,255,255,0.08)",
-            },
-        },
-        map_provider="carto",
-        map_style="light",
-        height=480,
-    )
+    st.plotly_chart(fig, use_container_width=True)
 
-    st.pydeck_chart(deck, use_container_width=True)
-
-    # Summary stats
-    well  = sum(1 for r in rows if r["score"] >= 70)
-    marg  = sum(1 for r in rows if 45 <= r["score"] < 70)
-    bad   = sum(1 for r in rows if r["score"] < 45)
-    avg   = round(sum(r["score"] for r in rows) / len(rows))
-    total = len(rows)
+    # Summary stats row
+    total = len(score_list)
+    well  = sum(1 for s in score_list if s >= 70)
+    marg  = sum(1 for s in score_list if 45 <= s < 70)
+    bad   = sum(1 for s in score_list if s < 45)
+    avg   = round(sum(score_list) / total)
 
     st.markdown(
         f'<div class="map-stat-grid">'
@@ -1218,25 +1330,24 @@ def _render_global_map_tab() -> None:
             f'<div class="map-stat-sub" style="color:{tc}">{sub}</div>'
             f'</div>'
             for val, lbl, sub, bg, tc in [
-                (well, "Well suited",  f"{well * 100 // total}% of zones", "rgba(22,163,74,.09)",  "#16a34a"),
-                (marg, "Marginal",     f"{marg * 100 // total}% of zones", "rgba(217,119,6,.09)",  "#d97706"),
-                (bad,  "Not suited",   f"{bad  * 100 // total}% of zones", "rgba(220,38,38,.09)",  "#dc2626"),
-                (avg,  "Avg score",    "out of 100",                        "rgba(99,102,241,.09)", "#6366f1"),
+                (well, "Well suited",  f"{well * 100 // total}% of countries", "rgba(22,163,74,.09)",  "#16a34a"),
+                (marg, "Marginal",     f"{marg * 100 // total}% of countries", "rgba(217,119,6,.09)",  "#d97706"),
+                (bad,  "Not suited",   f"{bad  * 100 // total}% of countries", "rgba(220,38,38,.09)",  "#dc2626"),
+                (avg,  "Avg score",    "out of 100",                            "rgba(99,102,241,.09)", "#6366f1"),
             ]
         )
         + '</div>',
         unsafe_allow_html=True,
     )
 
-    # Top suited zones
-    top = [r for r in sorted(rows, key=lambda r: r["score"], reverse=True) if r["score"] >= 45][:10]
+    # Top suited countries
+    ranked = sorted(zip(name_list, score_list), key=lambda x: x[1], reverse=True)
+    top = [(n, s) for n, s in ranked if s >= 45][:12]
     if top:
-        st.markdown('<div class="map-top-label">Top suited zones</div>', unsafe_allow_html=True)
+        st.markdown('<div class="map-top-label">Top suited countries</div>', unsafe_allow_html=True)
         chips = "".join(
-            f'<div class="map-chip">'
-            f'<span class="map-chip-score">{r["score"]}</span> {r["name"]}'
-            f'</div>'
-            for r in top
+            f'<div class="map-chip"><span class="map-chip-score">{s}</span> {n}</div>'
+            for n, s in top
         )
         st.markdown(f'<div style="display:flex;flex-wrap:wrap">{chips}</div>', unsafe_allow_html=True)
 
