@@ -613,7 +613,7 @@ def _score_gauge(score: int) -> go.Figure:
         domain={"x": [0, 1], "y": [0, 1]},
         number={"font": {"size": 34, "family": "Space Grotesk", "color": "#0f172a"}, "suffix": ""},
         gauge={
-            "axis": {"range": [0, 100], "tickwidth": 0, "tickcolor": "transparent", "showticklabels": False},
+            "axis": {"range": [0, 100], "tickwidth": 0, "tickcolor": "rgba(0,0,0,0)", "showticklabels": False},
             "bar":  {"color": color, "thickness": 0.28},
             "bgcolor": "rgba(0,0,0,0)",
             "borderwidth": 0,
