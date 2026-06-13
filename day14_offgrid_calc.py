@@ -470,19 +470,34 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .lp-stat-val  { font-size: .93rem; font-weight: 900; color: #fff; font-family: 'Space Grotesk', sans-serif; line-height: 1.1; }
 .lp-stat-lbl  { font-size: .6rem; color: rgba(255,255,255,.42); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-top: 2px; }
 
+/* ── Result header ── */
+.result-header {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.07);
+  padding: 13px 22px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05);
+}
+.rh-loc { font-size: .82rem; font-weight: 600; color: #1e293b; }
+.rh-badge { font-size: .72rem; font-weight: 800; padding: 6px 14px; border-radius: 20px; white-space: nowrap; letter-spacing: .02em; }
+
 /* ── Overview — score + system cards ── */
-.score-row { display: flex; align-items: center; gap: 28px; margin-bottom: 22px; }
-.score-gauge-wrap { flex-shrink: 0; }
-.score-info { flex: 1; }
-.score-headline { font-size: 2.8rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #0f172a; line-height: 1; margin-bottom: 5px; }
-.score-sub { font-size: .78rem; color: #64748b; line-height: 1.6; max-width: 340px; }
+.score-micro-lbl { font-size: .62rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
+.score-headline { font-size: 3.2rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #0f172a; line-height: 1; margin-bottom: 6px; }
+.score-sub { font-size: .76rem; color: #64748b; line-height: 1.6; max-width: 320px; margin-bottom: 2px; }
 .score-label-chip {
   display: inline-block; margin-top: 10px; padding: 5px 14px;
-  border-radius: 20px; font-size: .74rem; font-weight: 700;
+  border-radius: 20px; font-size: .73rem; font-weight: 700;
 }
 
 .sys-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
-.sys-card { background: #fff; border-radius: 18px; border: 1px solid rgba(0,0,0,.07); box-shadow: 0 3px 16px rgba(0,0,0,.05); overflow: hidden; }
+.sys-card { background: #fff; border-radius: 18px; border: 1px solid rgba(0,0,0,.07); box-shadow: 0 3px 16px rgba(0,0,0,.05); overflow: hidden; transition: box-shadow .18s, transform .18s; }
+.sys-card:hover { box-shadow: 0 8px 28px rgba(0,0,0,.10); transform: translateY(-2px); }
 .sys-bar { height: 4px; }
 .sys-body { padding: 16px 16px 14px; }
 .sys-icon-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -540,7 +555,18 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .ph-chip-icon { font-size: 1.0rem; }
 .ph-chip-text { font-size: .73rem; font-weight: 500; color: #64748b; }
 
-[data-testid="stTabs"] button[data-baseweb="tab"] { font-size: .8rem !important; font-weight: 600 !important; }
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+  font-size: .79rem !important; font-weight: 600 !important;
+  padding: 8px 14px !important; border-radius: 8px 8px 0 0 !important;
+  color: #64748b !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+  color: #0f172a !important; font-weight: 700 !important;
+}
+[data-testid="stTabsContent"] { padding-top: 16px !important; }
+
+/* Tighten plotly chart margins */
+[data-testid="stPlotlyChart"] { margin-bottom: 0 !important; }
 </style>
 """
 
@@ -627,9 +653,9 @@ def _score_gauge(score: int) -> go.Figure:
         },
     ))
     fig.update_layout(
-        height=180, width=200,
-        margin=dict(l=10, r=10, t=20, b=10),
-        paper_bgcolor="transparent",
+        height=210,
+        margin=dict(l=8, r=8, t=22, b=8),
+        paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Space Grotesk"},
     )
     return fig
@@ -686,12 +712,12 @@ def _monthly_chart(title: str, sub: str,
         mode="lines",
     ))
     fig.update_layout(
-        plot_bgcolor="transparent", paper_bgcolor="transparent",
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         height=240,
         margin=dict(l=0, r=0, t=8, b=0),
         legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11)),
         yaxis=dict(gridcolor="rgba(0,0,0,.05)", zeroline=False, tickfont=dict(size=11)),
-        xaxis=dict(gridcolor="transparent", tickfont=dict(size=11)),
+        xaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=11)),
         font=dict(family="Space Grotesk"),
         bargap=0.32,
     )
@@ -726,15 +752,16 @@ def _render_overview(r: dict) -> None:
     label, color, bg = _score_label(score)
 
     # Score row
-    col_g, col_info = st.columns([1, 2])
+    col_g, col_info = st.columns([1, 2.4])
     with col_g:
-        st.plotly_chart(_score_gauge(score), use_container_width=False, config={"displayModeBar": False})
+        st.plotly_chart(_score_gauge(score), use_container_width=True, config={"displayModeBar": False})
     with col_info:
         st.markdown(
-            f'<div style="padding-top:24px">'
-            f'<div class="score-headline">{score}<span style="font-size:1.5rem;color:#94a3b8">/100</span></div>'
-            f'<div class="score-sub">Your Independence Score — weighted: 40% energy, 30% water, 30% food.</div>'
-            f'<span class="score-label-chip" style="background:{bg};color:{color}">{label}</span>'
+            f'<div style="padding-top:14px">'
+            f'<div class="score-micro-lbl">Independence Score</div>'
+            f'<div class="score-headline">{score}<span style="font-size:1.4rem;color:#94a3b8;font-weight:600">/100</span></div>'
+            f'<div class="score-sub">Weighted: 40% energy · 30% water · 30% food</div>'
+            f'<span class="score-label-chip" style="background:{bg};color:{color};border:1px solid {color}28">{label}</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -998,6 +1025,16 @@ def main() -> None:
             st.markdown(_empty_state_html(), unsafe_allow_html=True)
         else:
             res = st.session_state["og_result"]
+            _s = res["score"]
+            _sl, _sc, _sbg = _score_label(_s)
+            st.markdown(
+                f'<div class="result-header">'
+                f'<div class="rh-loc">📍 <strong>{_loc_label(res["loc"])}</strong></div>'
+                f'<div class="rh-badge" style="background:{_sbg};color:{_sc};border:1px solid {_sc}38">'
+                f'{_s}/100 &nbsp;·&nbsp; {_sl}'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
             t1, t2, t3, t4, t5 = st.tabs(
                 ["Overview", "☀️ Solar & Battery", "💧 Water", "🌱 Food", "🤖 AI Roadmap"]
             )
