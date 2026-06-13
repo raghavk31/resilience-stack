@@ -310,30 +310,58 @@ def build_roadmap_prompt(r: dict) -> str:
     if loc.get("country"):
         loc_str += f", {loc['country']}"
 
-    return f"""You are an off-grid systems expert. Design a practical, phased implementation roadmap.
+    return f"""You are an off-grid systems expert. Return ONLY valid JSON (no markdown fences, no commentary) matching the schema below.
 
 LOCATION: {loc_str}
-HOUSEHOLD: {r['people']} people, {r['monthly_kwh']} kWh/month electricity use
-SOLAR: {s['required_wp']}W system · {s['annual_ghi']} kWh/m²/day GHI · {s['self_suff_pct']}% self-sufficient · ${s['cost']:,.0f}
-BATTERY: {b['capacity_kwh']} kWh ({b['num_units']} units) · {b['autonomy_days']} days autonomy · ${b['cost']:,.0f}
-WATER: {w['coverage_pct']}% coverage · {w['tank_liters']:,.0f}L tank · {w['annual_rain_mm']:.0f}mm/yr rainfall · ${w['cost']:,.0f}
-FOOD: {f['coverage_pct']}% food coverage · {f['land_area']}m² land · {f['grow_months']} growing months · ${f['cost']:,.0f}
-INDEPENDENCE SCORE: {score}/100
-TOTAL SYSTEM COST: ${total:,}
-AVAILABLE BUDGET: ${budget:,}
+HOUSEHOLD: {r['people']} people, {r['monthly_kwh']} kWh/month
+SOLAR: {s['required_wp']}W · {s['annual_ghi']} kWh/m²/day · {s['self_suff_pct']}% self-sufficient · ${s['cost']:,.0f}
+BATTERY: {b['capacity_kwh']} kWh · {b['autonomy_days']}d autonomy · ${b['cost']:,.0f}
+WATER: {w['coverage_pct']}% coverage · {w['tank_liters']:,}L tank · {w['annual_rain_mm']:.0f}mm/yr · ${w['cost']:,.0f}
+FOOD: {f['coverage_pct']}% caloric coverage · {f['land_area']}m² · {f['grow_months']} grow months · ${f['cost']:,.0f}
+CURRENT SCORE: {score}/100  |  TOTAL COST: ${total:,}  |  BUDGET: ${budget:,}
 
-Write a 3-phase implementation roadmap. Use markdown with clear headers, bullet points, and specific product specs. Be practical and location-aware. Aim for 450–550 words.
+JSON schema (fill every field):
+{{
+  "one_liner": "<one bold sentence about this household's independence path>",
+  "phase1": {{
+    "title": "Quick Wins",
+    "timeframe": "0–6 months",
+    "budget": <integer USD>,
+    "highlight": "<one sentence: what this phase achieves>",
+    "score_after": <integer 0-100, must be > {score}>,
+    "actions": [
+      {{"icon": "<single emoji>", "title": "<short action>", "detail": "<specific product model or spec>", "cost": <integer USD>}}
+    ]
+  }},
+  "phase2": {{
+    "title": "Core System",
+    "timeframe": "6–18 months",
+    "budget": <integer USD>,
+    "highlight": "<one sentence>",
+    "score_after": <integer 0-100, must be > phase1 score_after>,
+    "actions": [...]
+  }},
+  "phase3": {{
+    "title": "Full Independence",
+    "timeframe": "18–36 months",
+    "budget": <integer USD>,
+    "highlight": "<one sentence>",
+    "score_after": <integer 0-100, must be > phase2 score_after>,
+    "actions": [...]
+  }},
+  "risks": [
+    {{"icon": "<emoji>", "risk": "<short risk title>", "mitigation": "<practical fix>", "severity": "high|medium|low"}}
+  ],
+  "products": [
+    {{"category": "Solar|Battery|Water|Food", "icon": "<emoji>", "name": "<product name>", "why": "<1-sentence reason specific to {loc_str}>"}}
+  ]
+}}
 
-Structure:
-## Phase 1 — Quick Wins (0–6 months, ~$X)
-## Phase 2 — Core System (6–18 months, ~$X)
-## Phase 3 — Full Independence (18–36 months, ~$X)
-## Key Risks & Mitigations
-
-Include: specific panel/battery/tank models worth considering, installation sequencing, ROI timelines where relevant. Write for someone technically capable but not a specialist."""
+Rules: max 4 actions per phase · exactly 3–4 risks · exactly 4 products (one per category: Solar, Battery, Water, Food) · scores must increase each phase · be specific to {loc_str} climate. Return ONLY the JSON object."""
 
 
-def stream_ai_plan(prompt: str):
+def fetch_ai_plan(prompt: str) -> dict:
+    import json as _json
     try:
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -346,34 +374,21 @@ def stream_ai_plan(prompt: str):
             json={
                 "model":    MODEL,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 1200,
+                "max_tokens": 1800,
                 "temperature": 0.3,
-                "stream": True,
+                "stream": False,
             },
-            stream=True,
             timeout=90,
         )
         resp.raise_for_status()
-        for raw in resp.iter_lines():
-            if not raw:
-                continue
-            line = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-            if not line.startswith("data:"):
-                continue
-            payload = line[5:].strip()
-            if payload == "[DONE]":
-                break
-            try:
-                chunk = __import__("json").loads(payload)
-                delta = chunk["choices"][0]["delta"].get("content", "")
-                if delta:
-                    yield delta
-            except Exception:
-                continue
-    except requests.HTTPError as e:
-        yield f"\n\n*API error: {e}*"
+        text = resp.json()["choices"][0]["message"]["content"].strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            inner = lines[1:] if lines[0].startswith("```") else lines
+            text = "\n".join(l for l in inner if not l.strip().startswith("```"))
+        return _json.loads(text)
     except Exception as e:
-        yield f"\n\n*Error: {e}*"
+        return {"_error": str(e)}
 
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -539,11 +554,60 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .gcm-name { font-size: .6rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; }
 .gcm-icon { font-size: 1.1rem; }
 
-/* AI roadmap */
+/* AI roadmap — prompt card */
 .ai-intro { background: linear-gradient(135deg, rgba(245,158,11,.06), rgba(245,158,11,.02)); border: 1px solid rgba(245,158,11,.2); border-radius: 16px; padding: 18px 22px; margin-bottom: 22px; }
 .ai-intro-title { font-size: 1.0rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 6px; }
 .ai-intro-desc  { font-size: .78rem; color: #64748b; line-height: 1.6; }
-.ai-plan { background: #fff; border-radius: 16px; border: 1px solid rgba(0,0,0,.07); padding: 24px 28px; box-shadow: 0 3px 16px rgba(0,0,0,.04); font-size: .82rem; line-height: 1.8; color: #1e293b; }
+
+/* ── AI Roadmap visual ── */
+.ra-hero { background: linear-gradient(135deg, rgba(245,158,11,.07), rgba(245,158,11,.02)); border: 1px solid rgba(245,158,11,.22); border-radius: 16px; padding: 18px 22px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px; }
+.ra-hero-icon { font-size: 1.6rem; flex-shrink: 0; }
+.ra-hero-text  { font-size: .88rem; font-weight: 600; color: #1e293b; line-height: 1.65; font-family: 'Space Grotesk', sans-serif; }
+
+.ra-section-lbl { font-size: .62rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; margin-top: 6px; }
+
+/* Phase cards grid */
+.ra-phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+.ra-phase-card { background: #fff; border-radius: 16px; border: 1px solid rgba(0,0,0,.07); box-shadow: 0 3px 14px rgba(0,0,0,.05); padding: 18px; display: flex; flex-direction: column; gap: 10px; transition: box-shadow .18s, transform .18s; }
+.ra-phase-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.09); transform: translateY(-2px); }
+.ra-phase-top  { display: flex; align-items: center; justify-content: space-between; }
+.ra-phase-num  { font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; }
+.ra-phase-time { font-size: .65rem; font-weight: 600; color: #94a3b8; }
+.ra-phase-title  { font-size: .92rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; }
+.ra-phase-budget { font-size: 1.5rem; font-weight: 900; color: #0f172a; font-family: 'Space Grotesk', sans-serif; line-height: 1; }
+.ra-phase-hl    { font-size: .71rem; color: #64748b; line-height: 1.55; }
+
+/* Phase actions */
+.ra-actions     { display: flex; flex-direction: column; gap: 7px; }
+.ra-action      { display: flex; align-items: flex-start; gap: 9px; background: #f8fafc; border-radius: 10px; padding: 9px 10px; }
+.ra-action-ic   { font-size: 1.0rem; flex-shrink: 0; margin-top: 1px; }
+.ra-action-body { flex: 1; min-width: 0; }
+.ra-action-title  { font-size: .72rem; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
+.ra-action-detail { font-size: .67rem; color: #64748b; line-height: 1.4; }
+.ra-action-cost   { font-size: .7rem; font-weight: 800; white-space: nowrap; padding-top: 1px; }
+
+/* Score bar at bottom of phase card */
+.ra-score-bar      { height: 6px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.ra-score-bar-fill { height: 100%; border-radius: 4px; }
+.ra-score-after    { font-size: .68rem; font-weight: 700; color: #64748b; }
+
+/* Risk cards */
+.ra-risks { display: flex; flex-direction: column; gap: 10px; }
+.ra-risk-card  { background: #fff; border-radius: 12px; border: 1px solid rgba(0,0,0,.07); padding: 13px 15px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.ra-risk-top   { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.ra-risk-ic    { font-size: 1.0rem; flex-shrink: 0; }
+.ra-risk-title { font-size: .76rem; font-weight: 700; color: #1e293b; flex: 1; }
+.ra-risk-sev   { font-size: .59rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; padding: 2px 8px; border-radius: 10px; }
+.ra-risk-mit   { font-size: .71rem; color: #475569; line-height: 1.5; }
+
+/* Product cards */
+.ra-products { display: flex; flex-direction: column; gap: 10px; }
+.ra-product-card { background: #fff; border-radius: 12px; border: 1px solid rgba(0,0,0,.07); padding: 13px 15px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.ra-product-top  { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ra-product-ic   { font-size: 1.2rem; flex-shrink: 0; }
+.ra-product-cat  { font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 2px; }
+.ra-product-name { font-size: .76rem; font-weight: 700; color: #1e293b; }
+.ra-product-why  { font-size: .69rem; color: #64748b; line-height: 1.5; }
 
 /* Placeholder */
 .ph-wrap  { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 65vh; gap: 20px; padding: 36px 24px; text-align: center; }
@@ -928,48 +992,167 @@ def _render_food_tab(r: dict) -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _render_ai_tab(r: dict) -> None:
-    s, b, w, f = r["solar"], r["battery"], r["water"], r["food"]
-    total = int(s["cost"] + b["cost"] + w["cost"] + f["cost"])
+def _score_journey_chart(score: int, data: dict) -> go.Figure:
+    labels = ["Now", "Phase 1", "Phase 2", "Phase 3"]
+    values = [
+        score,
+        data["phase1"]["score_after"],
+        data["phase2"]["score_after"],
+        data["phase3"]["score_after"],
+    ]
+    dot_colors = ["#94a3b8", "#f59e0b", "#8b5cf6", "#16a34a"]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=labels, y=values,
+        fill="tozeroy", fillcolor="rgba(245,158,11,.07)",
+        line=dict(color="rgba(0,0,0,0)"),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=labels, y=values,
+        mode="lines+markers+text",
+        line=dict(color="#f59e0b", width=2.5, shape="spline"),
+        marker=dict(size=14, color=dot_colors, line=dict(color="#fff", width=2.5)),
+        text=[str(v) for v in values],
+        textposition="top center",
+        textfont=dict(size=13, family="Space Grotesk", color="#1e293b"),
+        showlegend=False,
+        hovertemplate="%{x}: %{y}/100<extra></extra>",
+    ))
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        height=170,
+        margin=dict(l=10, r=10, t=32, b=10),
+        yaxis=dict(range=[0, min(115, max(values) + 16)], showgrid=False, showticklabels=False, zeroline=False),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=12, family="Space Grotesk", color="#64748b")),
+        font=dict(family="Space Grotesk"),
+    )
+    return fig
 
-    st.markdown(
-        f'<div class="ai-intro">'
-        f'<div class="ai-intro-title">🤖 AI Implementation Roadmap</div>'
-        f'<div class="ai-intro-desc">'
-        f'Score: {r["score"]}/100 · Total system cost: ${total:,} · Budget: ${r["budget"]:,}. '
-        f'Claude will generate a phased plan specific to {r["loc"]["name"]}.'
-        f'</div></div>',
-        unsafe_allow_html=True,
+
+def _phase_card_html(p: dict, num: int, color: str) -> str:
+    actions = "".join(
+        f'<div class="ra-action">'
+        f'<span class="ra-action-ic">{a["icon"]}</span>'
+        f'<div class="ra-action-body">'
+        f'<div class="ra-action-title">{a["title"]}</div>'
+        f'<div class="ra-action-detail">{a["detail"]}</div>'
+        f'</div>'
+        f'<div class="ra-action-cost" style="color:{color}">${a["cost"]:,}</div>'
+        f'</div>'
+        for a in p.get("actions", [])
+    )
+    return (
+        f'<div class="ra-phase-card" style="border-top:3px solid {color}">'
+        f'<div class="ra-phase-top">'
+        f'<div class="ra-phase-num" style="background:{color}1a;color:{color}">Phase {num}</div>'
+        f'<div class="ra-phase-time">{p["timeframe"]}</div>'
+        f'</div>'
+        f'<div class="ra-phase-title" style="color:{color}">{p["title"]}</div>'
+        f'<div class="ra-phase-budget">${p["budget"]:,}</div>'
+        f'<div class="ra-phase-hl">{p["highlight"]}</div>'
+        f'<div class="ra-actions">{actions}</div>'
+        f'<div class="ra-score-bar"><div class="ra-score-bar-fill" style="width:{p["score_after"]}%;background:{color}"></div></div>'
+        f'<div class="ra-score-after" style="color:{color}">Score → {p["score_after"]}/100</div>'
+        f'</div>'
     )
 
-    if "og_ai_plan" in st.session_state and st.session_state["og_ai_plan"]:
-        st.markdown(
-            f'<div class="ai-plan">{st.session_state["og_ai_plan"]}</div>',
-            unsafe_allow_html=True,
-        )
+
+def _render_ai_tab(r: dict) -> None:
+    score = r["score"]
+
+    if "og_ai_data" in st.session_state and st.session_state["og_ai_data"]:
+        data = st.session_state["og_ai_data"]
+        if "_error" in data:
+            st.error(f"AI generation failed — {data['_error']}")
+        else:
+            # Hero one-liner
+            one_liner = data.get("one_liner", "")
+            if one_liner:
+                st.markdown(
+                    f'<div class="ra-hero"><div class="ra-hero-icon">🤖</div>'
+                    f'<div class="ra-hero-text">{one_liner}</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Score journey chart
+            st.markdown('<div class="ra-section-lbl">Score Journey</div>', unsafe_allow_html=True)
+            st.plotly_chart(_score_journey_chart(score, data), use_container_width=True,
+                            config={"displayModeBar": False})
+
+            # Phase cards
+            st.markdown('<div class="ra-section-lbl">Implementation Roadmap</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="ra-phases">'
+                + _phase_card_html(data["phase1"], 1, "#f59e0b")
+                + _phase_card_html(data["phase2"], 2, "#8b5cf6")
+                + _phase_card_html(data["phase3"], 3, "#16a34a")
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Risks + Products side by side
+            col_r, col_p = st.columns([1, 1])
+            with col_r:
+                st.markdown('<div class="ra-section-lbl">Key Risks</div>', unsafe_allow_html=True)
+                sev_clr = {"high": "#dc2626", "medium": "#b45309", "low": "#15803d"}
+                risks_html = '<div class="ra-risks">'
+                for risk in data.get("risks", []):
+                    sc = sev_clr.get(risk.get("severity", "medium"), "#b45309")
+                    risks_html += (
+                        f'<div class="ra-risk-card">'
+                        f'<div class="ra-risk-top">'
+                        f'<span class="ra-risk-ic">{risk.get("icon","⚠️")}</span>'
+                        f'<div class="ra-risk-title">{risk["risk"]}</div>'
+                        f'<span class="ra-risk-sev" style="background:{sc}18;color:{sc}">{risk.get("severity","medium")}</span>'
+                        f'</div>'
+                        f'<div class="ra-risk-mit">✅ {risk["mitigation"]}</div>'
+                        f'</div>'
+                    )
+                risks_html += '</div>'
+                st.markdown(risks_html, unsafe_allow_html=True)
+
+            with col_p:
+                st.markdown('<div class="ra-section-lbl">Top Product Picks</div>', unsafe_allow_html=True)
+                cat_clr = {"Solar": "#f59e0b", "Battery": "#8b5cf6", "Water": "#3b82f6", "Food": "#16a34a"}
+                prods_html = '<div class="ra-products">'
+                for prod in data.get("products", []):
+                    pc = cat_clr.get(prod.get("category", ""), "#64748b")
+                    prods_html += (
+                        f'<div class="ra-product-card" style="border-left:3px solid {pc}">'
+                        f'<div class="ra-product-top">'
+                        f'<span class="ra-product-ic">{prod.get("icon","🔧")}</span>'
+                        f'<div>'
+                        f'<div class="ra-product-cat" style="color:{pc}">{prod.get("category","")}</div>'
+                        f'<div class="ra-product-name">{prod["name"]}</div>'
+                        f'</div></div>'
+                        f'<div class="ra-product-why">{prod["why"]}</div>'
+                        f'</div>'
+                    )
+                prods_html += '</div>'
+                st.markdown(prods_html, unsafe_allow_html=True)
+
         if st.button("Regenerate Plan", key="og_ai_regen"):
-            st.session_state.pop("og_ai_plan", None)
+            st.session_state.pop("og_ai_data", None)
             st.rerun()
     else:
         if not OPENROUTER_KEY:
             st.warning("Set OPENROUTER_API_KEY to enable AI roadmap generation.")
             return
+        st.markdown(
+            f'<div class="ai-intro">'
+            f'<div class="ai-intro-title">🤖 AI Implementation Roadmap</div>'
+            f'<div class="ai-intro-desc">'
+            f'Score: {score}/100 · Claude will generate a visual, phased plan specific to {r["loc"]["name"]} — '
+            f'with score projections, product picks, and risk cards.'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
         if st.button("Generate My Roadmap", type="primary", key="og_ai_gen"):
-            prompt = build_roadmap_prompt(r)
-            plan_placeholder = st.empty()
-            full_text = ""
-            with st.spinner("Claude is writing your roadmap..."):
-                for chunk in stream_ai_plan(prompt):
-                    full_text += chunk
-                    plan_placeholder.markdown(
-                        f'<div class="ai-plan">{full_text}▌</div>',
-                        unsafe_allow_html=True,
-                    )
-            plan_placeholder.markdown(
-                f'<div class="ai-plan">{full_text}</div>',
-                unsafe_allow_html=True,
-            )
-            st.session_state["og_ai_plan"] = full_text
+            with st.spinner("Claude is designing your roadmap…"):
+                data = fetch_ai_plan(build_roadmap_prompt(r))
+            st.session_state["og_ai_data"] = data
+            st.rerun()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1090,7 +1273,7 @@ def main() -> None:
                     "roof_area":  roof_area,
                     "climate":    climate,
                 }
-                st.session_state.pop("og_ai_plan", None)
+                st.session_state.pop("og_ai_data", None)
                 st.rerun()
 
 
