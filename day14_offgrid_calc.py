@@ -397,6 +397,28 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap');
 
+/* ── Global dark reset ── */
+html, body {
+  background: #07080f !important;
+  color: #f1f5f9 !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+}
+[data-testid="stApp"] { background: #07080f !important; }
+[data-testid="stAppViewContainer"] { background: transparent !important; }
+[data-testid="stMainBlockContainer"] { background: transparent !important; }
+[data-testid="block-container"] { background: transparent !important; }
+[data-testid="stVerticalBlock"] { background: transparent !important; }
+[data-testid="stMarkdown"] { color: #f1f5f9; }
+[data-testid="stMarkdown"] p, [data-testid="stMarkdown"] span,
+[data-testid="stMarkdown"] li, [data-testid="stMarkdown"] h1,
+[data-testid="stMarkdown"] h2, [data-testid="stMarkdown"] h3 {
+  color: inherit !important;
+}
+[data-testid="stAlert"] { border-radius: 12px !important; }
+[data-testid="stAlert"] p { color: #f1f5f9 !important; }
+[data-testid="stSpinner"] p { color: rgba(255,255,255,.7) !important; }
+[data-testid="stStatusWidget"] { color: rgba(255,255,255,.7) !important; }
+
 /* ── Base & dark background ── */
 #MainMenu, header, footer { visibility: hidden; }
 section.main > div:first-child { padding-top: 0 !important; }
@@ -408,6 +430,7 @@ section.main {
     radial-gradient(ellipse at 50% 50%, rgba(15,23,42,1) 0%, rgba(7,11,24,1) 100%);
   font-family: 'Space Grotesk', sans-serif;
   min-height: 100vh;
+  color: #f1f5f9;
 }
 
 /* ── Two-column frame ── */
@@ -484,7 +507,7 @@ section.main {
   border-color: rgba(245,158,11,.55) !important;
   box-shadow: 0 0 0 3px rgba(245,158,11,.12), 0 0 16px rgba(245,158,11,.08) !important;
 }
-[data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child input::placeholder { color: rgba(255,255,255,.22) !important; }
+[data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child input::placeholder { color: rgba(255,255,255,.4) !important; }
 
 /* Selectbox */
 [data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-baseweb="select"] > div:first-child {
@@ -496,7 +519,7 @@ section.main {
 /* Labels */
 section.main label, section.main [data-testid="stWidgetLabel"] p {
   font-size: .7rem !important; font-weight: 700 !important;
-  color: rgba(255,255,255,.38) !important;
+  color: rgba(255,255,255,.6) !important;
   letter-spacing: .06em !important; text-transform: uppercase !important;
 }
 
@@ -506,10 +529,10 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .lp-logo { font-size: 2.2rem; line-height: 1; margin-bottom: 10px;
   filter: drop-shadow(0 0 14px rgba(245,158,11,.55)); }
 .lp-title { font-size: .95rem; font-weight: 800; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; margin-bottom: 4px; letter-spacing: -.1px; }
-.lp-desc  { font-size: .72rem; color: rgba(255,255,255,.38); line-height: 1.65; }
+.lp-desc  { font-size: .72rem; color: rgba(255,255,255,.62); line-height: 1.65; }
 .ca-sep   { border: none; border-top: 1px solid rgba(255,255,255,.06); margin: 0; }
 .lp-lbl   { font-size: .6rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
-  color: rgba(255,255,255,.28); display: block; padding: 13px 20px 4px; }
+  color: rgba(255,255,255,.55); display: block; padding: 13px 20px 4px; }
 
 /* Location data box */
 .lp-box {
@@ -519,13 +542,13 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   border: 1px solid rgba(245,158,11,.22);
   box-shadow: 0 4px 20px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.06);
 }
-.lp-box-label { font-size: .58rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: rgba(245,158,11,.55); margin-bottom: 8px; }
+.lp-box-label { font-size: .58rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: rgba(251,191,36,.85); margin-bottom: 8px; }
 .lp-box-loc   { font-size: .86rem; font-weight: 800; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; margin-bottom: 11px; line-height: 1.3; }
 .lp-box-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .lp-stat      { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 9px 11px; }
 .lp-stat-icon { font-size: .88rem; margin-bottom: 4px; }
 .lp-stat-val  { font-size: .93rem; font-weight: 900; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; line-height: 1.1; }
-.lp-stat-lbl  { font-size: .57rem; color: rgba(255,255,255,.35); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-top: 2px; }
+.lp-stat-lbl  { font-size: .57rem; color: rgba(255,255,255,.58); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-top: 2px; }
 
 /* ── Result header ── */
 .result-header {
@@ -540,10 +563,10 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .rh-badge { font-size: .71rem; font-weight: 800; padding: 7px 16px; border-radius: 20px; white-space: nowrap; letter-spacing: .03em; backdrop-filter: blur(10px); }
 
 /* ── Score section ── */
-.score-micro-lbl { font-size: .6rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.3); margin-bottom: 6px; }
+.score-micro-lbl { font-size: .6rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-bottom: 6px; }
 .score-headline { font-size: 4rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #f1f5f9; line-height: 1; margin-bottom: 8px;
   text-shadow: 0 0 40px rgba(245,158,11,.25); }
-.score-sub { font-size: .74rem; color: rgba(255,255,255,.42); line-height: 1.65; max-width: 300px; margin-bottom: 2px; }
+.score-sub { font-size: .74rem; color: rgba(255,255,255,.64); line-height: 1.65; max-width: 300px; margin-bottom: 2px; }
 .score-label-chip { display: inline-block; margin-top: 12px; padding: 6px 16px; border-radius: 20px; font-size: .72rem; font-weight: 700; backdrop-filter: blur(10px); }
 
 /* ── System cards ── */
@@ -566,8 +589,8 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .sys-icon-box { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
 .sys-name { font-size: .69rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .sys-pct  { font-size: 2.2rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; line-height: 1; margin-bottom: 3px; }
-.sys-pct-unit { font-size: .62rem; font-weight: 600; color: rgba(255,255,255,.35); margin-bottom: 10px; }
-.sys-metric { font-size: .69rem; color: rgba(255,255,255,.52); margin-bottom: 3px; display: flex; align-items: flex-start; gap: 6px; }
+.sys-pct-unit { font-size: .62rem; font-weight: 600; color: rgba(255,255,255,.58); margin-bottom: 10px; }
+.sys-metric { font-size: .69rem; color: rgba(255,255,255,.68); margin-bottom: 3px; display: flex; align-items: flex-start; gap: 6px; }
 .sys-metric-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; opacity: .7; }
 .sys-cost { display: inline-flex; align-items: center; gap: 4px; margin-top: 11px; padding: 4px 10px; border-radius: 8px; font-size: .69rem; font-weight: 700; }
 
@@ -579,10 +602,10 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   padding: 18px 22px; margin-bottom: 22px;
   box-shadow: 0 4px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05);
 }
-.budget-title { font-size: .6rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.28); margin-bottom: 12px; }
+.budget-title { font-size: .6rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-bottom: 12px; }
 .budget-track { height: 8px; background: rgba(255,255,255,.08); border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
 .budget-fill  { height: 100%; border-radius: 6px; transition: width .7s ease; box-shadow: 0 0 8px currentColor; }
-.budget-nums  { display: flex; justify-content: space-between; font-size: .7rem; color: rgba(255,255,255,.42); }
+.budget-nums  { display: flex; justify-content: space-between; font-size: .7rem; color: rgba(255,255,255,.64); }
 
 /* ── Chart card ── */
 .chart-card {
@@ -594,7 +617,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 }
 .chart-head  { padding: 20px 24px 0; }
 .chart-title { font-size: .96rem; font-weight: 800; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; margin-bottom: 3px; }
-.chart-sub   { font-size: .72rem; color: rgba(255,255,255,.38); line-height: 1.5; margin-bottom: 4px; }
+.chart-sub   { font-size: .72rem; color: rgba(255,255,255,.62); line-height: 1.5; margin-bottom: 4px; }
 
 /* ── Spec tiles ── */
 .spec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -605,8 +628,8 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 }
 .spec-icon  { font-size: 1.3rem; margin-bottom: 8px; }
 .spec-val   { font-size: 1.4rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #f1f5f9; line-height: 1; margin-bottom: 3px; }
-.spec-unit  { font-size: .59rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: rgba(255,255,255,.3); margin-bottom: 5px; }
-.spec-label { font-size: .69rem; color: rgba(255,255,255,.5); line-height: 1.45; }
+.spec-unit  { font-size: .59rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: rgba(255,255,255,.56); margin-bottom: 5px; }
+.spec-label { font-size: .69rem; color: rgba(255,255,255,.66); line-height: 1.45; }
 
 /* ── Warning pill ── */
 .warn-pill { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; font-size: .74rem; font-weight: 600; margin-bottom: 16px; backdrop-filter: blur(10px); }
@@ -625,7 +648,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   box-shadow: 0 4px 20px rgba(0,0,0,.3);
 }
 .ai-intro-title { font-size: 1.0rem; font-weight: 800; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; margin-bottom: 6px; }
-.ai-intro-desc  { font-size: .77rem; color: rgba(255,255,255,.48); line-height: 1.65; }
+.ai-intro-desc  { font-size: .77rem; color: rgba(255,255,255,.66); line-height: 1.65; }
 
 /* ── AI Roadmap visual ── */
 .ra-hero {
@@ -639,7 +662,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .ra-hero-icon { font-size: 1.7rem; flex-shrink: 0; filter: drop-shadow(0 0 10px rgba(245,158,11,.5)); }
 .ra-hero-text { font-size: .88rem; font-weight: 600; color: rgba(255,255,255,.82); line-height: 1.7; font-family: 'Space Grotesk', sans-serif; }
 
-.ra-section-lbl { font-size: .59rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.28); margin-bottom: 12px; margin-top: 8px; }
+.ra-section-lbl { font-size: .59rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-bottom: 12px; margin-top: 8px; }
 
 /* Phase cards */
 .ra-phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
@@ -658,22 +681,22 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 }
 .ra-phase-top  { display: flex; align-items: center; justify-content: space-between; }
 .ra-phase-num  { font-size: .58rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; padding: 3px 10px; border-radius: 20px; }
-.ra-phase-time { font-size: .63rem; font-weight: 600; color: rgba(255,255,255,.32); }
+.ra-phase-time { font-size: .63rem; font-weight: 600; color: rgba(255,255,255,.55); }
 .ra-phase-title  { font-size: .9rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; color: rgba(255,255,255,.9); }
 .ra-phase-budget { font-size: 1.55rem; font-weight: 900; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; line-height: 1; }
-.ra-phase-hl    { font-size: .7rem; color: rgba(255,255,255,.48); line-height: 1.6; }
+.ra-phase-hl    { font-size: .7rem; color: rgba(255,255,255,.66); line-height: 1.6; }
 
 .ra-actions     { display: flex; flex-direction: column; gap: 7px; }
 .ra-action      { display: flex; align-items: flex-start; gap: 9px; background: rgba(255,255,255,.042); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 9px 10px; }
 .ra-action-ic   { font-size: 1.0rem; flex-shrink: 0; margin-top: 1px; }
 .ra-action-body { flex: 1; min-width: 0; }
-.ra-action-title  { font-size: .71rem; font-weight: 700; color: rgba(255,255,255,.85); margin-bottom: 2px; }
-.ra-action-detail { font-size: .66rem; color: rgba(255,255,255,.43); line-height: 1.45; }
+.ra-action-title  { font-size: .71rem; font-weight: 700; color: rgba(255,255,255,.88); margin-bottom: 2px; }
+.ra-action-detail { font-size: .66rem; color: rgba(255,255,255,.62); line-height: 1.45; }
 .ra-action-cost   { font-size: .7rem; font-weight: 800; white-space: nowrap; padding-top: 1px; }
 
 .ra-score-bar      { height: 5px; background: rgba(255,255,255,.08); border-radius: 4px; overflow: hidden; }
 .ra-score-bar-fill { height: 100%; border-radius: 4px; }
-.ra-score-after    { font-size: .66rem; font-weight: 700; color: rgba(255,255,255,.38); }
+.ra-score-after    { font-size: .66rem; font-weight: 700; color: rgba(255,255,255,.6); }
 
 /* Risk cards */
 .ra-risks { display: flex; flex-direction: column; gap: 10px; }
@@ -685,9 +708,9 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 }
 .ra-risk-top   { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
 .ra-risk-ic    { font-size: 1.0rem; flex-shrink: 0; }
-.ra-risk-title { font-size: .75rem; font-weight: 700; color: rgba(255,255,255,.85); flex: 1; }
+.ra-risk-title { font-size: .75rem; font-weight: 700; color: rgba(255,255,255,.88); flex: 1; }
 .ra-risk-sev   { font-size: .57rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; padding: 2px 8px; border-radius: 10px; backdrop-filter: blur(10px); }
-.ra-risk-mit   { font-size: .7rem; color: rgba(255,255,255,.48); line-height: 1.55; }
+.ra-risk-mit   { font-size: .7rem; color: rgba(255,255,255,.66); line-height: 1.55; }
 
 /* Product cards */
 .ra-products { display: flex; flex-direction: column; gap: 10px; }
@@ -700,14 +723,14 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .ra-product-top  { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .ra-product-ic   { font-size: 1.2rem; flex-shrink: 0; }
 .ra-product-cat  { font-size: .58rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 2px; }
-.ra-product-name { font-size: .76rem; font-weight: 700; color: rgba(255,255,255,.85); }
-.ra-product-why  { font-size: .68rem; color: rgba(255,255,255,.46); line-height: 1.55; }
+.ra-product-name { font-size: .76rem; font-weight: 700; color: rgba(255,255,255,.88); }
+.ra-product-why  { font-size: .68rem; color: rgba(255,255,255,.66); line-height: 1.55; }
 
 /* ── Placeholder / empty state ── */
 .ph-wrap  { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 72vh; gap: 22px; padding: 36px 24px; text-align: center; }
 .ph-big   { font-size: 4.5rem; line-height: 1; filter: drop-shadow(0 0 24px rgba(245,158,11,.45)); }
 .ph-title { font-size: 1.2rem; font-weight: 800; color: #f1f5f9; font-family: 'Space Grotesk', sans-serif; letter-spacing: -.2px; }
-.ph-desc  { font-size: .8rem; color: rgba(255,255,255,.4); max-width: 380px; line-height: 1.75; }
+.ph-desc  { font-size: .8rem; color: rgba(255,255,255,.62); max-width: 380px; line-height: 1.75; }
 .ph-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 500px; }
 .ph-chip  {
   display: flex; align-items: center; gap: 6px; padding: 8px 14px;
@@ -720,9 +743,14 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 }
 .ph-chip:hover { background: rgba(255,255,255,.1); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.3); }
 .ph-chip-icon { font-size: 1.0rem; }
-.ph-chip-text { font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.62); }
+.ph-chip-text { font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.75); }
+
+/* ── Generic fallback: any input/select text ── */
+input, textarea, select { color: #f1f5f9 !important; }
 
 /* ── Tabs ── */
+[data-testid="stTabs"]        { background: transparent !important; }
+[data-testid="stTabsContent"] { background: transparent !important; }
 [data-testid="stTabs"] [role="tablist"] {
   background: rgba(255,255,255,.05) !important;
   backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important;
@@ -732,7 +760,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 [data-testid="stTabs"] button[data-baseweb="tab"] {
   font-size: .77rem !important; font-weight: 600 !important;
   padding: 8px 14px !important; border-radius: 9px !important;
-  color: rgba(255,255,255,.4) !important;
+  color: rgba(255,255,255,.62) !important;
   font-family: 'Space Grotesk', sans-serif !important;
   transition: all .18s !important;
   background: transparent !important;
@@ -896,9 +924,9 @@ def _monthly_chart(title: str, sub: str,
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         height=240,
         margin=dict(l=0, r=0, t=8, b=0),
-        legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11, color="rgba(255,255,255,.65)")),
-        yaxis=dict(gridcolor="rgba(255,255,255,.06)", zeroline=False, tickfont=dict(size=11, color="rgba(255,255,255,.45)")),
-        xaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=11, color="rgba(255,255,255,.45)")),
+        legend=dict(orientation="h", y=1.15, x=0, font=dict(size=11, color="rgba(255,255,255,.75)")),
+        yaxis=dict(gridcolor="rgba(255,255,255,.06)", zeroline=False, tickfont=dict(size=11, color="rgba(255,255,255,.62)")),
+        xaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=11, color="rgba(255,255,255,.62)")),
         font=dict(family="Space Grotesk"),
         bargap=0.32,
     )
@@ -940,7 +968,7 @@ def _render_overview(r: dict) -> None:
         st.markdown(
             f'<div style="padding-top:14px">'
             f'<div class="score-micro-lbl">Independence Score</div>'
-            f'<div class="score-headline">{score}<span style="font-size:1.4rem;color:rgba(255,255,255,.25);font-weight:500">/100</span></div>'
+            f'<div class="score-headline">{score}<span style="font-size:1.4rem;color:rgba(255,255,255,.45);font-weight:500">/100</span></div>'
             f'<div class="score-sub">Weighted: 40% energy · 30% water · 30% food</div>'
             f'<span class="score-label-chip" style="background:{bg};color:{color};border:1px solid {color}28">{label}</span>'
             f'</div>',
@@ -1090,8 +1118,8 @@ def _render_food_tab(r: dict) -> None:
         if t >= 10:
             return "rgba(245,158,11,.13)", "#fbbf24", "🌱"
         if t >= 5:
-            return "rgba(148,163,184,.08)", "rgba(255,255,255,.45)", "🥶"
-        return "rgba(148,163,184,.04)", "rgba(255,255,255,.3)", "❄️"
+            return "rgba(148,163,184,.08)", "rgba(255,255,255,.62)", "🥶"
+        return "rgba(148,163,184,.04)", "rgba(255,255,255,.55)", "❄️"
 
     cal_html = '<div style="padding:0 22px 22px"><div style="font-size:.65rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px">Growing Calendar</div><div class="grow-cal">'
     for m in range(1, 13):
@@ -1141,7 +1169,7 @@ def _score_journey_chart(score: int, data: dict) -> go.Figure:
         height=170,
         margin=dict(l=10, r=10, t=32, b=10),
         yaxis=dict(range=[0, min(115, max(values) + 16)], showgrid=False, showticklabels=False, zeroline=False),
-        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=12, family="Space Grotesk", color="#64748b")),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=12, family="Space Grotesk", color="rgba(255,255,255,.66)")),
         font=dict(family="Space Grotesk"),
     )
     return fig
@@ -1212,7 +1240,7 @@ def _render_ai_tab(r: dict) -> None:
             col_r, col_p = st.columns([1, 1])
             with col_r:
                 st.markdown('<div class="ra-section-lbl">Key Risks</div>', unsafe_allow_html=True)
-                sev_clr = {"high": "#dc2626", "medium": "#b45309", "low": "#15803d"}
+                sev_clr = {"high": "#f87171", "medium": "#fbbf24", "low": "#4ade80"}
                 risks_html = '<div class="ra-risks">'
                 for risk in data.get("risks", []):
                     sc = sev_clr.get(risk.get("severity", "medium"), "#b45309")
