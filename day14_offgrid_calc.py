@@ -530,7 +530,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .lp-pad  { padding: 22px 20px 14px; }
 .lp-logo { font-size: 2.2rem; line-height: 1; margin-bottom: 10px;
   filter: drop-shadow(0 0 14px rgba(245,158,11,.55)); }
-.lp-title { font-size: .95rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 4px; letter-spacing: -.1px; }
+.lp-title { font-size: .95rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 6px; letter-spacing: -.1px; line-height: 1.3; }
 .lp-desc  { font-size: .72rem; color: #64748b; line-height: 1.65; }
 .ca-sep   { border: none; border-top: 1px solid rgba(15,23,42,.08); margin: 0; }
 .lp-lbl   { font-size: .6rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
@@ -566,7 +566,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 
 /* ── Score section ── */
 .score-micro-lbl { font-size: .6rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
-.score-headline { font-size: 4rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #0f172a; line-height: 1; margin-bottom: 8px;
+.score-headline { font-size: 4rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #0f172a; line-height: 1.08; margin-bottom: 14px;
   text-shadow: 0 4px 24px rgba(245,158,11,.18); }
 .score-sub { font-size: .74rem; color: #64748b; line-height: 1.65; max-width: 300px; margin-bottom: 2px; }
 .score-label-chip { display: inline-block; margin-top: 12px; padding: 6px 16px; border-radius: 20px; font-size: .72rem; font-weight: 700; backdrop-filter: blur(10px); }
@@ -590,7 +590,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .sys-icon-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .sys-icon-box { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
 .sys-name { font-size: .69rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.sys-pct  { font-size: 2.2rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; line-height: 1; margin-bottom: 3px; }
+.sys-pct  { font-size: 2.2rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; line-height: 1.1; margin-bottom: 5px; }
 .sys-pct-unit { font-size: .62rem; font-weight: 600; color: #64748b; margin-bottom: 10px; }
 .sys-metric { font-size: .69rem; color: #475569; margin-bottom: 3px; display: flex; align-items: flex-start; gap: 6px; }
 .sys-metric-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; opacity: .7; }
@@ -617,9 +617,9 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   box-shadow: 0 8px 32px rgba(31,41,55,.09), inset 0 1px 0 rgba(255,255,255,.6);
   margin-bottom: 22px; overflow: hidden;
 }
-.chart-head  { padding: 20px 24px 0; }
-.chart-title { font-size: .96rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 3px; }
-.chart-sub   { font-size: .72rem; color: #64748b; line-height: 1.5; margin-bottom: 4px; }
+.chart-head  { padding: 20px 24px 12px; }
+.chart-title { font-size: .96rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 6px; line-height: 1.3; }
+.chart-sub   { font-size: .72rem; color: #64748b; line-height: 1.5; margin-bottom: 0; }
 
 /* ── Spec tiles ── */
 .spec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -630,7 +630,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   box-shadow: 0 4px 16px rgba(31,41,55,.06);
 }
 .spec-icon  { font-size: 1.3rem; margin-bottom: 8px; }
-.spec-val   { font-size: 1.4rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #0f172a; line-height: 1; margin-bottom: 3px; }
+.spec-val   { font-size: 1.4rem; font-weight: 900; font-family: 'Space Grotesk', sans-serif; color: #0f172a; line-height: 1.1; margin-bottom: 5px; }
 .spec-unit  { font-size: .59rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: #64748b; margin-bottom: 5px; }
 .spec-label { font-size: .69rem; color: #475569; line-height: 1.45; }
 
@@ -650,7 +650,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
   border-radius: 18px; padding: 20px 24px; margin-bottom: 22px;
   box-shadow: 0 4px 20px rgba(31,41,55,.08);
 }
-.ai-intro-title { font-size: 1.0rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 6px; }
+.ai-intro-title { font-size: 1.0rem; font-weight: 800; color: #0f172a; font-family: 'Space Grotesk', sans-serif; margin-bottom: 8px; line-height: 1.3; }
 .ai-intro-desc  { font-size: .77rem; color: #475569; line-height: 1.65; }
 
 /* ── AI Roadmap visual ── */
@@ -686,7 +686,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .ra-phase-num  { font-size: .58rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; padding: 3px 10px; border-radius: 20px; }
 .ra-phase-time { font-size: .63rem; font-weight: 600; color: #64748b; }
 .ra-phase-title  { font-size: .9rem; font-weight: 800; font-family: 'Space Grotesk', sans-serif; color: #0f172a; }
-.ra-phase-budget { font-size: 1.55rem; font-weight: 900; color: #0f172a; font-family: 'Space Grotesk', sans-serif; line-height: 1; }
+.ra-phase-budget { font-size: 1.55rem; font-weight: 900; color: #0f172a; font-family: 'Space Grotesk', sans-serif; line-height: 1.1; }
 .ra-phase-hl    { font-size: .7rem; color: #475569; line-height: 1.6; }
 
 .ra-actions     { display: flex; flex-direction: column; gap: 7px; }
