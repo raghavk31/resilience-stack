@@ -463,7 +463,7 @@ section.main {
 [data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-testid="stTextInput"],
 [data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-testid="stSelectbox"],
 [data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-testid="stSlider"] {
-  padding: 0 20px 11px !important;
+  padding: 4px 20px 15px !important;
 }
 [data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-testid="stButton"] {
   padding: 0 20px 20px !important;
@@ -502,7 +502,13 @@ section.main {
   color: #1e293b !important;
   border-radius: 10px !important; font-size: .83rem !important;
   font-family: 'Space Grotesk', sans-serif !important;
+  padding: 10px 13px !important; line-height: 1.5 !important; min-height: 42px !important;
   transition: all .18s !important;
+}
+/* Input wrapper (BaseWeb) — strip its own border so only the input shows */
+[data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-baseweb="input"],
+[data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-baseweb="base-input"] {
+  background: transparent !important; border: none !important;
 }
 [data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child input:focus {
   background: rgba(255,255,255,.9) !important;
@@ -516,13 +522,20 @@ section.main {
   background: rgba(255,255,255,.6) !important;
   border: 1px solid rgba(15,23,42,.12) !important;
   border-radius: 10px !important; color: #1e293b !important;
+  min-height: 42px !important; padding: 3px 6px !important;
+}
+[data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-baseweb="select"] div[value],
+[data-testid="stHorizontalBlock"]:has(.og-left) > [data-testid="stColumn"]:first-child [data-baseweb="select"] span {
+  font-size: .83rem !important; line-height: 1.5 !important;
 }
 
 /* Labels */
+section.main [data-testid="stWidgetLabel"] { margin-bottom: 7px !important; }
 section.main label, section.main [data-testid="stWidgetLabel"] p {
   font-size: .7rem !important; font-weight: 700 !important;
   color: #64748b !important;
   letter-spacing: .06em !important; text-transform: uppercase !important;
+  line-height: 1.5 !important;
 }
 
 /* ── Left panel HTML ── */
@@ -534,7 +547,7 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .lp-desc  { font-size: .72rem; color: #64748b; line-height: 1.65; }
 .ca-sep   { border: none; border-top: 1px solid rgba(15,23,42,.08); margin: 0; }
 .lp-lbl   { font-size: .6rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
-  color: #94a3b8; display: block; padding: 13px 20px 4px; }
+  color: #94a3b8; display: block; padding: 15px 20px 8px; line-height: 1.5; }
 
 /* Location data box */
 .lp-box {
