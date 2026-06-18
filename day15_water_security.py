@@ -79,9 +79,14 @@ GARDEN_L_PER_M2 = 3.0    # average daily irrigation demand (L/m²/day)
 # End-use shares of indoor demand (sum = 1.00)
 F_TOILET  = 0.28         # non-potable, greywater can offset
 F_GREYGEN = 0.50         # shower + laundry + basin → produces greywater
+F_POTABLE_INDOOR = 0.45  # drinking, cooking, bathing, basin → must be potable-grade
+                         # (the rest of indoor — toilet + laundry — and all garden is non-potable)
 
 # Costs (USD)
-COST_PER_LITER_TANK = 0.40
+# Storage cost falls with volume: small poly tanks are dear per litre, bulk
+# ferrocement/HDPE is cheap. Tiers are (upper litre bound, $/L within that tier).
+TANK_COST_TIERS = [(5000, 0.40), (20000, 0.22), (float("inf"), 0.12)]
+PRACTICAL_TANK_L    = 10000  # largest common single tank; above this, split into N units
 COST_COLLECTION     = 350    # gutters, mesh, first-flush diverter
 COST_FILTRATION     = 600    # sediment + carbon + UV (potable-grade)
 COST_PUMP           = 250
@@ -184,6 +189,18 @@ def _simulate(coll: dict, demand: dict, cap: float, cycles: int = 4) -> tuple[fl
     return supplied, deficit_months, overflow
 
 
+def _tank_cost(liters: float) -> float:
+    """Tiered storage cost — cheaper per litre at higher volume."""
+    cost, prev = 0.0, 0.0
+    for cap, rate in TANK_COST_TIERS:
+        vol = min(liters, cap) - prev
+        if vol <= 0:
+            break
+        cost += vol * rate
+        prev = cap
+    return cost
+
+
 def plan_water(people: int, per_capita: int, roof_area: float,
                runoff: float, garden_area: float, gw_system: str,
                climate: dict) -> dict:
@@ -215,7 +232,6 @@ def plan_water(people: int, per_capita: int, roof_area: float,
 
     remaining_daily   = max(0.0, total_daily - grey_usable_daily)
     annual_remaining  = remaining_daily * 365
-    monthly_rain_need = {m: round(remaining_daily * DAYS_MO, 0) for m in range(1, 13)}
     supply_limited    = annual_coll < annual_remaining
 
     # Steady "draw" the system can sustain: you can only draw, on average,
@@ -223,6 +239,13 @@ def plan_water(people: int, per_capita: int, roof_area: float,
     # tank sizing stays finite (an undersized roof can't be fixed by a bigger tank).
     draw_daily   = min(remaining_daily, 0.95 * annual_coll / 365)
     monthly_draw = {m: draw_daily * DAYS_MO for m in range(1, 13)}
+
+    # The monthly "need" the table and chart show is the sustainable draw the tank
+    # is actually sized against — not the full post-greywater demand. Comparing
+    # collection to the draw keeps the monthly balance, the deficit list, and the
+    # tank simulation telling one story (otherwise an undersized roof flags every
+    # month as a deficit while the simulation reports only the dry ones).
+    monthly_rain_need = {m: round(monthly_draw[m], 0) for m in range(1, 13)}
 
     # Tank sizing — Rippl mass-curve: storage needed to bridge the dry season
     # for the sustainable draw. Run two cycles so a dry run spanning the year
@@ -246,6 +269,23 @@ def plan_water(people: int, per_capita: int, roof_area: float,
     grey_pct     = round(grey_annual / max(annual_demand, 1) * 100, 1)
     rain_pct     = round(rain_supplied / max(annual_demand, 1) * 100, 1)
 
+    # ── Potable vs non-potable coverage ──
+    # Greywater is non-potable only (toilet/laundry/garden). Filtered rainwater
+    # can serve potable demand, so allocate greywater to non-potable first, then
+    # rainwater to potable first (highest-value use), spilling any surplus onto
+    # the non-potable demand greywater didn't reach.
+    potable_daily  = indoor_daily * F_POTABLE_INDOOR
+    nonpot_daily   = total_daily - potable_daily
+    potable_annual = potable_daily * 365
+    nonpot_annual  = nonpot_daily * 365
+
+    np_from_grey  = min(grey_annual, nonpot_annual)
+    pot_from_rain = min(rain_supplied, potable_annual)
+    np_from_rain  = min(rain_supplied - pot_from_rain, nonpot_annual - np_from_grey)
+
+    potable_pct = round(min(100.0, pot_from_rain / max(potable_annual, 1) * 100), 1)
+    nonpot_pct  = round(min(100.0, (np_from_grey + np_from_rain) / max(nonpot_annual, 1) * 100), 1)
+
     tank_days   = tank_l / max(draw_daily, 1)
     reliability = max(0.0, (12 - deficit_months) / 12)     # months the tank meets the draw
     # Coverage is the ceiling — you can't be secure beyond what you actually supply.
@@ -253,7 +293,9 @@ def plan_water(people: int, per_capita: int, roof_area: float,
     score = min(100, round(coverage_pct * (0.70 + 0.30 * reliability)))
 
     # ── Cost ──
-    cost = (tank_l * COST_PER_LITER_TANK + COST_COLLECTION
+    tank_cost  = _tank_cost(tank_l)
+    tank_units = max(1, math.ceil(tank_l / PRACTICAL_TANK_L))
+    cost = (tank_cost + COST_COLLECTION
             + COST_FILTRATION + COST_PUMP + COST_GW[gw_system])
 
     monthly_balance = {m: monthly_coll[m] - monthly_rain_need[m] for m in range(1, 13)}
@@ -270,6 +312,11 @@ def plan_water(people: int, per_capita: int, roof_area: float,
         "coverage_pct":    coverage_pct,
         "rain_pct":        rain_pct,
         "grey_pct":        grey_pct,
+        # potable vs non-potable
+        "potable_pct":     potable_pct,
+        "nonpot_pct":      nonpot_pct,
+        "potable_daily":   round(potable_daily, 0),
+        "nonpot_daily":    round(nonpot_daily, 0),
         # demand
         "indoor_daily":    round(indoor_daily, 0),
         "garden_daily":    round(garden_daily, 0),
@@ -287,6 +334,7 @@ def plan_water(people: int, per_capita: int, roof_area: float,
         "supply_limited":  supply_limited,
         "tank_liters":     int(tank_l),
         "tank_days":       round(tank_days, 0),
+        "tank_units":      tank_units,
         # greywater
         "grey_gen_daily":  round(grey_gen_daily, 0),
         "grey_usable":     round(grey_usable_daily, 0),
@@ -297,7 +345,7 @@ def plan_water(people: int, per_capita: int, roof_area: float,
         "rain_monthly":    rain_m,
         # cost
         "cost":            round(cost, 0),
-        "tank_cost":       round(tank_l * COST_PER_LITER_TANK, 0),
+        "tank_cost":       round(tank_cost, 0),
         "gw_cost":         COST_GW[gw_system],
     }
 
@@ -573,6 +621,21 @@ section.main label, section.main [data-testid="stWidgetLabel"] p {
 .score-headline { font-size: 4rem; font-weight: 900; color: #0f172a; line-height: 1.08; margin-bottom: 14px; text-shadow: 0 4px 24px rgba(14,165,233,.18); }
 .score-sub { font-size: .74rem; color: #64748b; line-height: 1.65; max-width: 320px; margin-bottom: 2px; }
 .score-label-chip { display: inline-block; margin-top: 12px; padding: 6px 16px; border-radius: 20px; font-size: .72rem; font-weight: 700; backdrop-filter: blur(10px); }
+
+/* ── Potable / non-potable tier split ── */
+.tier-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 4px 0 20px; }
+.tier-row {
+  background: rgba(255,255,255,.5);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,.7); border-radius: 16px; padding: 15px 18px;
+  box-shadow: 0 4px 16px rgba(31,41,55,.07);
+}
+.tier-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.tier-name { font-size: .74rem; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 7px; }
+.tier-pct  { font-size: 1.5rem; font-weight: 900; line-height: 1; }
+.tier-bar  { height: 7px; background: rgba(15,23,42,.07); border-radius: 5px; overflow: hidden; margin-bottom: 9px; }
+.tier-fill { height: 100%; border-radius: 5px; transition: width .4s ease; }
+.tier-note { font-size: .64rem; color: #64748b; line-height: 1.5; }
 
 /* ── System cards ── */
 .sys-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
@@ -993,6 +1056,24 @@ def _render_overview(r: dict) -> None:
         )
 
     st.markdown(
+        '<div class="tier-split">'
+        f'<div class="tier-row">'
+        f'<div class="tier-head"><span class="tier-name">🚰 Potable water</span>'
+        f'<span class="tier-pct" style="color:{C_RAIN}">{r["potable_pct"]:.0f}%</span></div>'
+        f'<div class="tier-bar"><div class="tier-fill" style="width:{r["potable_pct"]}%;background:{C_RAIN}"></div></div>'
+        f'<div class="tier-note">Drinking · cooking · bathing — {r["potable_daily"]:,.0f} L/day. '
+        f'Met by filtered rainwater only; the ${COST_FILTRATION} filtration is what makes this safe to drink.</div></div>'
+        f'<div class="tier-row">'
+        f'<div class="tier-head"><span class="tier-name">🚽 Non-potable water</span>'
+        f'<span class="tier-pct" style="color:{C_GREY}">{r["nonpot_pct"]:.0f}%</span></div>'
+        f'<div class="tier-bar"><div class="tier-fill" style="width:{r["nonpot_pct"]}%;background:{C_GREY}"></div></div>'
+        f'<div class="tier-note">Toilet · laundry · garden — {r["nonpot_daily"]:,.0f} L/day. '
+        f'Met by greywater first, then any surplus rainwater.</div></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
         '<div class="sys-grid">'
         + _sys_card_html("🌧️", "Rainwater", f"{r['rain_pct']:.0f}", "% of demand",
                          [f"{r['annual_coll']:,.0f} L collectable/yr",
@@ -1036,10 +1117,13 @@ def _render_rain_tab(r: dict) -> None:
         f'90% first-flush efficiency · source: {r["rain_source"]}</div></div>',
         unsafe_allow_html=True,
     )
+    tank_label = f"{r['tank_days']:.0f} days of buffer"
+    if r["tank_units"] > 1:
+        tank_label += f" · ≈{r['tank_units']} tanks"
     specs = [
         _spec_tile_html("🌧️", f"{r['annual_coll']:,.0f}", "L/yr", "Collectable from your roof"),
         _spec_tile_html("✅", f"{r['rain_supplied']:,.0f}", "L/yr", f"Actually usable ({r['rain_pct']:.0f}% of demand)"),
-        _spec_tile_html("🛢️", f"{r['tank_liters']:,}", "L tank", f"{r['tank_days']:.0f} days of buffer"),
+        _spec_tile_html("🛢️", f"{r['tank_liters']:,}", "L tank", tank_label),
     ]
     st.markdown('<div style="padding:18px 22px 0"><div class="spec-grid">' + "".join(specs) + "</div></div>",
                 unsafe_allow_html=True)
@@ -1081,7 +1165,7 @@ def _render_rain_tab(r: dict) -> None:
     st.markdown(
         '<div class="chart-card"><div class="chart-head">'
         '<div class="chart-title">📅 Monthly Water Balance</div>'
-        '<div class="chart-sub">Litres collected vs. demand left after greywater reuse</div></div>'
+        '<div class="chart-sub">Litres collected each month vs. the steady draw your roof + tank can sustain</div></div>'
         '<div style="padding:4px 22px 18px"><table class="mtbl">'
         '<tr><th>Month</th><th>Rain (mm)</th><th>Collected (L)</th><th>Need (L)</th><th>Balance</th></tr>'
         + rows + '</table></div></div>',
@@ -1275,6 +1359,15 @@ def main() -> None:
                 f'{r["score"]}/100 &nbsp;·&nbsp; {_sl}</div></div>',
                 unsafe_allow_html=True,
             )
+            if r["rain_source"] == "estimate":
+                st.markdown(
+                    '<div class="warn-pill" style="background:rgba(245,158,11,.16);color:#b45309;'
+                    'border:1px solid rgba(245,158,11,.3);margin-bottom:18px">'
+                    '⚠️ Live rainfall data was unavailable for this location, so this plan falls back on a '
+                    'generic ~480&nbsp;mm/yr estimate. Treat every number here as a rough guide, not a final design — '
+                    'recheck with local rainfall records before you buy a tank.</div>',
+                    unsafe_allow_html=True,
+                )
             t1, t2, t3, t4 = st.tabs(["Overview", "🌧️ Rainwater", "♻️ Greywater", "🤖 AI Plan"])
             with t1:
                 _render_overview(r)
