@@ -3,8 +3,8 @@
 
 | Day | Tool | Status |
 |-----|------|--------|
-| 01 | Grid Stress | Live |
-| 02 | Solar Atlas | Live |
-| 03 | Water Stress | Live |
-| 04 | Fragile Food System | Live |
-| 05 | Heat Map | Live |
+| 01 | Global Grid Stress Map | Live |
+| 02 | Solar Potential Atlas | Live |
+| 03 | Water Stress Index | Live |
+| 04 | Food System Fragility Map | Live |
+| 05 | Extreme Heat Atlas | Live |
