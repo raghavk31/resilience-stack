@@ -10,8 +10,12 @@ create table if not exists cool_spots (
   city          text,
   neighbourhood text,
   upvotes       integer default 0,
+  flagged       boolean default false,   -- Day 16/20 moderation (plan-act2 T4)
   created_at    timestamptz default now()
 );
+
+-- If the table already exists from an earlier run, add the moderation column:
+alter table cool_spots add column if not exists flagged boolean default false;
 
 -- anyone can read, anyone can add (fully anonymous UGC)
 alter table cool_spots enable row level security;

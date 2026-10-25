@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .DS_Store
 .gstack/
+explorer/.cache/
+day*.log
+# third-party reference images, not ours to publish
+resources/
